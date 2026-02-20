@@ -2,31 +2,29 @@
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="220dp"
     android:layout_height="130dp"
-    android:layout_marginLeft="6dp"
-    android:layout_marginRight="6dp"
-    android:layout_marginTop="8dp"
-    android:layout_marginBottom="8dp"
+    android:layout_marginRight="12dp"
     android:clipChildren="false"
     android:clipToPadding="false"
     android:focusable="true"
     android:focusableInTouchMode="true">
 
-    <!-- 阴影层（焦点时显示） -->
+    <!-- 阴影层 -->
     <View
         android:id="@+id/tile_shadow"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:layout_marginTop="8dp"
-        android:alpha="0"
-        android:background="@drawable/card_shadow" />
+        android:layout_margin="4dp"
+        android:background="@drawable/card_shadow"
+        android:alpha="0" />
 
-    <!-- 卡片主体 -->
+    <!-- 卡片背景 -->
     <View
         android:id="@+id/tile_card_bg"
         android:layout_width="match_parent"
-        android:layout_height="match_parent" />
+        android:layout_height="match_parent"
+        android:background="@drawable/tile_background" />
 
-    <!-- 内容层 -->
+    <!-- 内容 -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="match_parent"
@@ -34,27 +32,27 @@
         android:gravity="center"
         android:padding="16dp">
 
+        <!-- 网站名称 -->
         <TextView
             android:id="@+id/tv_tile_name"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:textColor="@color/text_primary"
+            android:textColor="#FFFFFF"
             android:textSize="16sp"
-            android:fontFamily="sans-serif-medium"
-            android:gravity="center"
-            android:maxLines="2"
+            android:textStyle="bold"
+            android:singleLine="true"
             android:ellipsize="end" />
 
-        <TextView
-            android:id="@+id/tv_tile_level"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:textColor="@color/text_secondary"
-            android:textSize="11sp"
-            android:fontFamily="sans-serif-light"
-            android:layout_marginTop="4dp"
-            android:gravity="center" />
-
     </LinearLayout>
+
+    <!-- 模式标签（右下角） -->
+    <TextView
+        android:id="@+id/tv_tile_level"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom|right"
+        android:layout_margin="10dp"
+        android:textColor="#98989D"
+        android:textSize="11sp" />
 
 </FrameLayout>

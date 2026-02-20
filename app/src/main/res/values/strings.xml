@@ -1,4 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">TileTV</string>
+    <string name="settings_title">设置</string>
+    <string name="server_connected">已连接</string>
+    <string name="server_disconnected">未连接</string>
+    <string name="mode_ai_nav">AI Nav</string>
+    <string name="mode_cursor">光标模式</string>
+    <string name="mode_local">离线模式</string>
+    <string name="press_menu_settings">按 Menu 键打开设置</string>
+    <string name="offline_fallback">服务器未连接，使用离线模式</string>
 </resources>

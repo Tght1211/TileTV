@@ -5,16 +5,23 @@ import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.TextView;
+
 import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
+
 import com.tiletv.app.R;
 import com.tiletv.app.model.TileCategory;
+
 import java.util.List;
 
 /**
- * 分类行适配器 - Apple TV 风格
- * 每个 item 包含分类标题 + 水平滚动的卡片行
+ * Category row adapter - Apple TV style.
+ *
+ * Each row in the outer vertical RecyclerView contains a category title
+ * and a horizontally scrolling RecyclerView of tile cards.
+ * clipToPadding and clipChildren are false to allow cards to scale up
+ * beyond their bounds on focus.
  */
 public class CategoryAdapter extends RecyclerView.Adapter<CategoryAdapter.CategoryViewHolder> {
 
@@ -42,7 +49,7 @@ public class CategoryAdapter extends RecyclerView.Adapter<CategoryAdapter.Catego
         TileCategory category = categories.get(position);
         holder.tvCategoryName.setText(category.getName());
 
-        // 每行一个水平 RecyclerView
+        // Horizontal RecyclerView for tile cards
         LinearLayoutManager layoutManager = new LinearLayoutManager(
                 context, LinearLayoutManager.HORIZONTAL, false);
         holder.rvTilesRow.setLayoutManager(layoutManager);
@@ -50,7 +57,7 @@ public class CategoryAdapter extends RecyclerView.Adapter<CategoryAdapter.Catego
         TileAdapter tileAdapter = new TileAdapter(context, category.getTiles(), tileClickListener);
         holder.rvTilesRow.setAdapter(tileAdapter);
 
-        // 允许子 RecyclerView 接收焦点用于 D-pad 导航
+        // Allow inner RecyclerView children to receive focus for D-pad navigation
         holder.rvTilesRow.setFocusable(false);
         holder.rvTilesRow.setNestedScrollingEnabled(false);
     }

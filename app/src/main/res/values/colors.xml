@@ -1,14 +1,22 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="background_dark">#FF000000</color>
-    <color name="background_surface">#FF1C1C1E</color>
-    <color name="card_default">#FF2C2C2E</color>
-    <color name="card_focused">#FF3A3A3C</color>
-    <color name="accent">#FF0A84FF</color>
-    <color name="focus_glow">#66FFFFFF</color>
-    <color name="text_primary">#FFFFFFFF</color>
-    <color name="text_secondary">#FF8E8E93</color>
-    <color name="text_category">#FF98989D</color>
-    <color name="shadow_color">#99000000</color>
-    <color name="top_bar_bg">#CC000000</color>
+    <color name="black">#FF000000</color>
+    <color name="white">#FFFFFFFF</color>
+
+    <!-- Apple TV 色彩系统 -->
+    <color name="bg_primary">#000000</color>
+    <color name="bg_surface">#1C1C1E</color>
+    <color name="bg_surface_elevated">#2C2C2E</color>
+    <color name="accent_blue">#0A84FF</color>
+    <color name="accent_purple">#5E5CE6</color>
+    <color name="accent_green">#30D158</color>
+    <color name="accent_red">#FF453A</color>
+    <color name="accent_orange">#FF9F0A</color>
+    <color name="text_primary">#FFFFFF</color>
+    <color name="text_secondary">#98989D</color>
+    <color name="text_tertiary">#636366</color>
+    <color name="focus_glow">#660A84FF</color>
+    <color name="focus_border">#40FFFFFF</color>
+    <color name="separator">#38383A</color>
+    <color name="card_shadow">#40000000</color>
 </resources>

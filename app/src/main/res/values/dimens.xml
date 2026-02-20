@@ -1,23 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Apple TV 风格卡片 -->
     <dimen name="tile_width">220dp</dimen>
     <dimen name="tile_height">130dp</dimen>
-    <dimen name="tile_corner_radius">12dp</dimen>
-    <dimen name="tile_margin_horizontal">12dp</dimen>
-    <dimen name="tile_margin_vertical">8dp</dimen>
-
-    <!-- 分类行 -->
-    <dimen name="category_label_size">18sp</dimen>
-    <dimen name="category_padding_top">28dp</dimen>
-    <dimen name="category_padding_bottom">8dp</dimen>
-    <dimen name="row_padding_start">48dp</dimen>
-
-    <!-- 全局 -->
-    <dimen name="screen_padding_horizontal">48dp</dimen>
-    <dimen name="screen_padding_top">32dp</dimen>
-    <dimen name="title_text_size">32sp</dimen>
-    <dimen name="tile_name_text_size">16sp</dimen>
-    <dimen name="tile_level_text_size">11sp</dimen>
-    <dimen name="clock_text_size">16sp</dimen>
+    <dimen name="tile_corner_radius">16dp</dimen>
+    <dimen name="tile_spacing">12dp</dimen>
+    <dimen name="row_spacing">28dp</dimen>
+    <dimen name="top_bar_height">56dp</dimen>
+    <dimen name="screen_padding">32dp</dimen>
+    <dimen name="card_padding">16dp</dimen>
+    <dimen name="category_title_size">20sp</dimen>
+    <dimen name="tile_name_size">16sp</dimen>
+    <dimen name="tile_level_size">11sp</dimen>
 </resources>

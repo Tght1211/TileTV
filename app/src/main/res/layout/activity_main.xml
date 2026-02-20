@@ -1,50 +1,79 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:orientation="vertical"
-    android:background="@color/background_dark">
+    android:background="@drawable/bg_gradient_dark">
 
-    <!-- 顶部栏：标题 + 时钟 -->
-    <RelativeLayout
+    <!-- 顶部状态栏 -->
+    <LinearLayout
+        android:id="@+id/top_bar"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:paddingLeft="48dp"
-        android:paddingRight="48dp"
-        android:paddingTop="24dp"
-        android:paddingBottom="8dp">
+        android:layout_height="56dp"
+        android:layout_gravity="top"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:paddingLeft="32dp"
+        android:paddingRight="32dp"
+        android:background="@drawable/bg_topbar_gradient">
 
+        <!-- App标题 -->
         <TextView
-            android:id="@+id/tv_main_title"
-            android:layout_width="wrap_content"
+            android:id="@+id/tv_app_title"
+            android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:layout_alignParentLeft="true"
-            android:layout_centerVertical="true"
+            android:layout_weight="1"
             android:text="TileTV"
-            android:textColor="@color/text_primary"
-            android:textSize="32sp"
-            android:fontFamily="sans-serif-light"
+            android:textColor="#FFFFFF"
+            android:textSize="22sp"
             android:textStyle="bold" />
 
+        <!-- 服务器状态 -->
+        <View
+            android:id="@+id/status_dot"
+            android:layout_width="8dp"
+            android:layout_height="8dp"
+            android:layout_marginRight="8dp"
+            android:background="@drawable/dot_red" />
+
+        <TextView
+            android:id="@+id/tv_server_status"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="未连接"
+            android:textColor="#98989D"
+            android:textSize="14sp"
+            android:layout_marginRight="24dp" />
+
+        <!-- 时钟 -->
         <TextView
             android:id="@+id/tv_clock"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_alignParentRight="true"
-            android:layout_centerVertical="true"
-            android:textColor="@color/text_secondary"
-            android:textSize="16sp"
-            android:fontFamily="sans-serif-light" />
+            android:textColor="#98989D"
+            android:textSize="16sp" />
+    </LinearLayout>
 
-    </RelativeLayout>
-
-    <!-- 分类行列表（垂直滚动） -->
+    <!-- 分类列表 -->
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/rv_categories"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:clipToPadding="false"
+        android:layout_marginTop="56dp"
+        android:paddingTop="16dp"
         android:paddingBottom="32dp"
-        android:overScrollMode="never" />
+        android:paddingLeft="32dp"
+        android:clipToPadding="false"
+        android:clipChildren="false" />
 
-</LinearLayout>
+    <!-- 底部服务器信息 -->
+    <TextView
+        android:id="@+id/tv_server_info"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom|center_horizontal"
+        android:layout_marginBottom="8dp"
+        android:textColor="#636366"
+        android:textSize="12sp"
+        android:text="按 Menu 键打开设置" />
+
+</FrameLayout>

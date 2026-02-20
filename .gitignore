@@ -8,3 +8,12 @@
 .externalNativeBuild
 .cxx
 local.properties
+
+# Server
+server/node_modules/
+server/dist/
+server/.env
+server/data/*.json
+
+# APK
+*.apk

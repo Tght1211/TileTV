@@ -2,33 +2,29 @@
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:orientation="vertical">
+    android:orientation="vertical"
+    android:layout_marginBottom="28dp"
+    android:clipChildren="false"
+    android:clipToPadding="false">
 
     <!-- 分类标题 -->
     <TextView
         android:id="@+id/tv_category_name"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:textColor="@color/text_category"
-        android:textSize="18sp"
-        android:fontFamily="sans-serif-medium"
-        android:textAllCaps="true"
-        android:letterSpacing="0.05"
-        android:paddingLeft="48dp"
-        android:paddingRight="48dp"
-        android:paddingTop="28dp"
-        android:paddingBottom="8dp" />
+        android:textColor="#FFFFFF"
+        android:textSize="20sp"
+        android:textStyle="bold"
+        android:layout_marginBottom="12dp"
+        android:layout_marginLeft="4dp" />
 
-    <!-- 水平滚动的卡片行 -->
+    <!-- 卡片水平滚动 -->
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/rv_tiles_row"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:clipToPadding="false"
         android:clipChildren="false"
-        android:paddingLeft="48dp"
-        android:paddingRight="48dp"
-        android:overScrollMode="never"
-        android:focusable="false" />
+        android:overScrollMode="never" />
 
 </LinearLayout>

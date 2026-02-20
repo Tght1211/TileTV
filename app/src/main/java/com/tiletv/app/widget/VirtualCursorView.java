@@ -9,20 +9,28 @@ import android.view.KeyEvent;
 import android.view.View;
 import android.webkit.WebView;
 
+import com.tiletv.app.ws.WebSocketManager;
+
 /**
- * 虚拟光标覆盖层 View，用于 Level 3 降级模式
+ * Virtual cursor overlay view for D-pad navigation.
  *
- * 在 WebView 上方覆盖一个透明 View，绘制十字准星样式的光标。
- * 遥控器方向键移动光标，OK键模拟右键点击，菜单键模拟左键点击。
- * 兼容 API 17，不使用 evaluateJavascript。
+ * Supports two modes:
+ * - Server mode: cursor movements and clicks are sent via WebSocket to the backend
+ * - Local mode: cursor operates directly on a WebView (legacy fallback)
+ *
+ * Draws an orange crosshair cursor. Direction keys move the cursor,
+ * OK key (DPAD_CENTER) triggers a click, MENU key triggers an alternative click.
+ *
+ * Compatible with API 17+. Does not use evaluateJavascript().
  */
 public class VirtualCursorView extends View {
 
     private float cursorX;
     private float cursorY;
-    private int stepSize = 20;       // 普通移动步长（像素）
-    private int fastStepSize = 50;   // 长按加速步长（像素）
+    private int stepSize = 20;
+    private int fastStepSize = 50;
     private boolean cursorEnabled = false;
+    private boolean serverMode = false;
     private WebView webView;
 
     private Paint cursorPaint;
@@ -30,7 +38,7 @@ public class VirtualCursorView extends View {
     private Paint crosshairPaint;
 
     private long lastKeyTime = 0;
-    private static final long FAST_THRESHOLD = 300; // 毫秒，长按加速阈值
+    private static final long FAST_THRESHOLD = 300;
 
     public VirtualCursorView(Context context) {
         super(context);
@@ -48,18 +56,18 @@ public class VirtualCursorView extends View {
     }
 
     private void init() {
-        // 内圆画笔 - 橙红色填充
+        // Inner circle paint - orange fill
         cursorPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
         cursorPaint.setColor(Color.parseColor("#FF6B35"));
         cursorPaint.setStyle(Paint.Style.FILL);
 
-        // 外圈画笔 - 白色描边
+        // Outer ring paint - white stroke
         cursorOutlinePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
         cursorOutlinePaint.setColor(Color.WHITE);
         cursorOutlinePaint.setStyle(Paint.Style.STROKE);
         cursorOutlinePaint.setStrokeWidth(3f);
 
-        // 十字线画��� - 白色描边
+        // Crosshair lines paint - white stroke
         crosshairPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
         crosshairPaint.setColor(Color.WHITE);
         crosshairPaint.setStyle(Paint.Style.STROKE);
@@ -70,19 +78,33 @@ public class VirtualCursorView extends View {
     }
 
     /**
-     * 关联 WebView，用于在光标位置模拟点击
+     * Attach to a WebView for local (offline) mode.
+     *
+     * @param webView The WebView to interact with
      */
-    public void setWebView(WebView webView) {
+    public void attachToWebView(WebView webView) {
         this.webView = webView;
+        this.serverMode = false;
     }
 
     /**
-     * 开启/关闭光标模式
+     * Set whether this cursor operates in server mode.
+     * In server mode, cursor clicks are sent via WebSocket.
+     *
+     * @param serverMode true for server mode, false for local WebView mode
+     */
+    public void setServerMode(boolean serverMode) {
+        this.serverMode = serverMode;
+    }
+
+    /**
+     * Enable or disable the cursor.
+     *
+     * @param enabled true to show cursor, false to hide
      */
     public void setCursorEnabled(boolean enabled) {
         this.cursorEnabled = enabled;
         if (enabled) {
-            // 初始位置：屏幕中央
             cursorX = getWidth() / 2f;
             cursorY = getHeight() / 2f;
             setVisibility(View.VISIBLE);
@@ -97,16 +119,10 @@ public class VirtualCursorView extends View {
         return cursorEnabled;
     }
 
-    /**
-     * 获取当前光标 X 坐标
-     */
     public float getCursorX() {
         return cursorX;
     }
 
-    /**
-     * 获取当前光标 Y 坐标
-     */
     public float getCursorY() {
         return cursorY;
     }
@@ -125,11 +141,11 @@ public class VirtualCursorView extends View {
         super.onDraw(canvas);
         if (!cursorEnabled) return;
 
-        // 外圈
+        // Outer ring
         canvas.drawCircle(cursorX, cursorY, 18f, cursorOutlinePaint);
-        // 内圆
+        // Inner circle
         canvas.drawCircle(cursorX, cursorY, 8f, cursorPaint);
-        // 十字线（上下左右四段短线）
+        // Crosshair lines
         float len = 28f;
         canvas.drawLine(cursorX - len, cursorY, cursorX - 12, cursorY, crosshairPaint);
         canvas.drawLine(cursorX + 12, cursorY, cursorX + len, cursorY, crosshairPaint);
@@ -137,11 +153,16 @@ public class VirtualCursorView extends View {
         canvas.drawLine(cursorX, cursorY + 12, cursorX, cursorY + len, crosshairPaint);
     }
 
-    @Override
-    public boolean onKeyDown(int keyCode, KeyEvent event) {
-        if (!cursorEnabled) return super.onKeyDown(keyCode, event);
+    /**
+     * Handle a key event from the parent Activity.
+     *
+     * @param keyCode The key code
+     * @param event   The key event
+     * @return true if the event was consumed
+     */
+    public boolean handleKeyEvent(int keyCode, KeyEvent event) {
+        if (!cursorEnabled) return false;
 
-        // 根据按键间隔判断是否长按加速
         long now = System.currentTimeMillis();
         int step = (now - lastKeyTime < FAST_THRESHOLD) ? fastStepSize : stepSize;
         lastKeyTime = now;
@@ -165,52 +186,72 @@ public class VirtualCursorView extends View {
                 return true;
             case KeyEvent.KEYCODE_DPAD_CENTER:
             case KeyEvent.KEYCODE_ENTER:
-                // OK键 → 右键点击（触发 contextmenu 事件）
-                simulateClick(cursorX, cursorY, true);
+                if (serverMode) {
+                    sendCursorClick(cursorX, cursorY);
+                } else {
+                    simulateClick(cursorX, cursorY, false);
+                }
                 return true;
             case KeyEvent.KEYCODE_MENU:
-                // 菜单键 → 左��点击（主确认操作）
-                simulateClick(cursorX, cursorY, false);
+                if (serverMode) {
+                    sendCursorClick(cursorX, cursorY);
+                } else {
+                    simulateClick(cursorX, cursorY, true);
+                }
                 return true;
+        }
+        return false;
+    }
+
+    @Override
+    public boolean onKeyDown(int keyCode, KeyEvent event) {
+        if (handleKeyEvent(keyCode, event)) {
+            return true;
         }
         return super.onKeyDown(keyCode, event);
     }
 
     /**
-     * 在光标位置模拟点击
-     * 通过 WebView.loadUrl("javascript:...") 执行 JS 来实现（兼容 API 17）
-     *
-     * @param x          View 坐标 X
-     * @param y          View 坐标 Y
-     * @param isRightClick 是否为右键点击
+     * Send cursor click event to the server via WebSocket.
      */
-    private void simulateClick(float x, float y, boolean isRightClick) {
+    private void sendCursorClick(float x, float y) {
+        WebSocketManager ws = WebSocketManager.getInstance();
+        ws.send("{\"type\":\"cursor\",\"action\":\"click\",\"x\":" + (int) x + ",\"y\":" + (int) y + "}");
+    }
+
+    /**
+     * Simulate a click on the WebView at the given coordinates.
+     * Uses loadUrl("javascript:...") for API 17 compatibility.
+     *
+     * @param x            View coordinate X
+     * @param y            View coordinate Y
+     * @param isLeftClick  true for left click (from MENU key), false for standard click
+     */
+    @SuppressWarnings("deprecation")
+    private void simulateClick(float x, float y, boolean isLeftClick) {
         if (webView == null) return;
 
-        // 将 View 坐标转换为 WebView 内的网页坐标
         float scale = webView.getScale();
         float jsX = (x + webView.getScrollX()) / scale;
         float jsY = (y + webView.getScrollY()) / scale;
 
         String js;
-        if (isRightClick) {
-            // 右键：触发 contextmenu 事件
+        if (isLeftClick) {
             js = "javascript:void((function(){" +
-                 "var el=document.elementFromPoint(" + jsX + "," + jsY + ");" +
-                 "if(el){" +
-                 "var ev=document.createEvent('MouseEvents');" +
-                 "ev.initMouseEvent('contextmenu',true,true,window,1," +
-                 jsX + "," + jsY + "," + jsX + "," + jsY +
-                 ",false,false,false,false,2,null);" +
-                 "el.dispatchEvent(ev);" +
-                 "}" +
-                 "})())";
+                    "var el=document.elementFromPoint(" + jsX + "," + jsY + ");" +
+                    "if(el){" +
+                    "var ev=document.createEvent('MouseEvents');" +
+                    "ev.initMouseEvent('contextmenu',true,true,window,1," +
+                    jsX + "," + jsY + "," + jsX + "," + jsY +
+                    ",false,false,false,false,2,null);" +
+                    "el.dispatchEvent(ev);" +
+                    "}" +
+                    "})())";
         } else {
-            // 左键：触发 click
             js = "javascript:void((function(){" +
-                 "var el=document.elementFromPoint(" + jsX + "," + jsY + ");" +
-                 "if(el){el.click();}" +
-                 "})())";
+                    "var el=document.elementFromPoint(" + jsX + "," + jsY + ");" +
+                    "if(el){el.click();}" +
+                    "})())";
         }
         webView.loadUrl(js);
     }

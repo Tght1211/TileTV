@@ -1,0 +1,151 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="#000000"
+    android:padding="48dp"
+    android:gravity="center_horizontal">
+
+    <!-- 标题 -->
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="设置"
+        android:textColor="#FFFFFF"
+        android:textSize="28sp"
+        android:textStyle="bold"
+        android:layout_marginBottom="32dp" />
+
+    <!-- 服务器设置卡片 -->
+    <LinearLayout
+        android:layout_width="480dp"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:background="@drawable/bg_settings_card"
+        android:padding="24dp">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="服务器连接"
+            android:textColor="#FFFFFF"
+            android:textSize="18sp"
+            android:textStyle="bold"
+            android:layout_marginBottom="16dp" />
+
+        <!-- 服务器地址 -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="服务器地址"
+            android:textColor="#98989D"
+            android:textSize="13sp"
+            android:layout_marginBottom="4dp" />
+
+        <EditText
+            android:id="@+id/et_host"
+            android:layout_width="match_parent"
+            android:layout_height="44dp"
+            android:background="@drawable/bg_input"
+            android:textColor="#FFFFFF"
+            android:textColorHint="#636366"
+            android:hint="例如: 192.168.1.100"
+            android:textSize="15sp"
+            android:paddingLeft="12dp"
+            android:paddingRight="12dp"
+            android:inputType="text"
+            android:singleLine="true"
+            android:layout_marginBottom="12dp"
+            android:focusable="true"
+            android:focusableInTouchMode="true" />
+
+        <!-- 端口 -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="端口"
+            android:textColor="#98989D"
+            android:textSize="13sp"
+            android:layout_marginBottom="4dp" />
+
+        <EditText
+            android:id="@+id/et_port"
+            android:layout_width="120dp"
+            android:layout_height="44dp"
+            android:background="@drawable/bg_input"
+            android:textColor="#FFFFFF"
+            android:textColorHint="#636366"
+            android:hint="9870"
+            android:textSize="15sp"
+            android:paddingLeft="12dp"
+            android:paddingRight="12dp"
+            android:inputType="number"
+            android:singleLine="true"
+            android:layout_marginBottom="20dp"
+            android:focusable="true"
+            android:focusableInTouchMode="true" />
+
+        <!-- 按钮行 -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center">
+
+            <Button
+                android:id="@+id/btn_test"
+                android:layout_width="0dp"
+                android:layout_height="44dp"
+                android:layout_weight="1"
+                android:layout_marginRight="8dp"
+                android:background="@drawable/bg_btn_secondary"
+                android:text="测试连接"
+                android:textColor="#0A84FF"
+                android:textSize="15sp"
+                android:focusable="true" />
+
+            <Button
+                android:id="@+id/btn_save"
+                android:layout_width="0dp"
+                android:layout_height="44dp"
+                android:layout_weight="1"
+                android:layout_marginLeft="8dp"
+                android:background="@drawable/bg_btn_primary"
+                android:text="保存"
+                android:textColor="#FFFFFF"
+                android:textSize="15sp"
+                android:focusable="true" />
+        </LinearLayout>
+
+        <!-- 连接状态 -->
+        <TextView
+            android:id="@+id/tv_test_result"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:textSize="13sp"
+            android:textColor="#98989D"
+            android:visibility="gone" />
+    </LinearLayout>
+
+    <!-- H5地址提示 -->
+    <TextView
+        android:id="@+id/tv_h5_url"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="24dp"
+        android:textColor="#636366"
+        android:textSize="13sp"
+        android:text="H5语音控制: http://服务器地址:端口/h5" />
+
+    <!-- 版本信息 -->
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="16dp"
+        android:textColor="#636366"
+        android:textSize="12sp"
+        android:text="TileTV v2.0.0 · AI Navigation Edition" />
+
+</LinearLayout>
