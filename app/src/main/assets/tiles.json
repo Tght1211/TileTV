@@ -1,0 +1,37 @@
+{
+  "categories": [
+    {
+      "name": "视频平台",
+      "tiles": [
+        { "name": "YouTube", "url": "https://www.youtube.com/tv", "icon": "youtube", "level": 1 },
+        { "name": "哔哩哔哩", "url": "https://m.bilibili.com", "icon": "bilibili", "level": 2 },
+        { "name": "抖音", "url": "https://www.douyin.com", "icon": "douyin", "level": 3 },
+        { "name": "Netflix", "url": "https://www.netflix.com/browse", "icon": "netflix", "level": 2 },
+        { "name": "爱奇艺", "url": "https://m.iqiyi.com", "icon": "iqiyi", "level": 2 },
+        { "name": "优酷", "url": "https://m.youku.com", "icon": "youku", "level": 2 }
+      ]
+    },
+    {
+      "name": "电视直播",
+      "tiles": [
+        { "name": "央视直播", "url": "https://tv.cctv.com/live/", "icon": "cctv", "level": 2 },
+        { "name": "咪咕视频", "url": "https://www.miguvideo.com/", "icon": "migu", "level": 2 }
+      ]
+    },
+    {
+      "name": "全球直播",
+      "tiles": [
+        { "name": "Pluto TV", "url": "https://pluto.tv/live-tv", "icon": "plutotv", "level": 2 },
+        { "name": "Plex Live", "url": "https://watch.plex.tv/live-tv", "icon": "plex", "level": 2 },
+        { "name": "Samsung TV Plus", "url": "https://www.samsungtvplus.com/", "icon": "samsung", "level": 2 }
+      ]
+    },
+    {
+      "name": "工具",
+      "tiles": [
+        { "name": "百度", "url": "https://www.baidu.com", "icon": "baidu", "level": 2 },
+        { "name": "Google", "url": "https://www.google.com", "icon": "google", "level": 2 }
+      ]
+    }
+  ]
+}
