@@ -15,8 +15,8 @@ import com.tiletv.app.model.TileItem;
 import java.util.List;
 
 /**
- * 磁贴卡片网格适配器
- * 支持 D-pad 焦点导航，焦点时放大+高亮，失焦恢复
+ * 卡片适配器 - Apple TV 风格
+ * 焦点效果：放大 + 3D 微倾斜 + 白色光晕边框 + 阴影浮起
  */
 public class TileAdapter extends RecyclerView.Adapter<TileAdapter.TileViewHolder> {
 
@@ -28,17 +28,21 @@ public class TileAdapter extends RecyclerView.Adapter<TileAdapter.TileViewHolder
     private final OnTileClickListener listener;
     private final Context context;
 
-    // 预定义一组卡片背景色
+    // Apple TV 风格配色 - 低饱和度、优雅
     private static final int[] TILE_COLORS = {
-        Color.parseColor("#E53935"), // 红色
-        Color.parseColor("#1E88E5"), // 蓝色
-        Color.parseColor("#43A047"), // 绿色
-        Color.parseColor("#FB8C00"), // 橙色
-        Color.parseColor("#8E24AA"), // 紫色
-        Color.parseColor("#00ACC1"), // 青色
-        Color.parseColor("#3949AB"), // 靛蓝
-        Color.parseColor("#D81B60"), // 粉色
+        Color.parseColor("#1C3D5A"), // 深蓝
+        Color.parseColor("#5A1C3D"), // 深玫红
+        Color.parseColor("#1C5A3D"), // 深绿
+        Color.parseColor("#5A3D1C"), // 深琥珀
+        Color.parseColor("#3D1C5A"), // 深紫
+        Color.parseColor("#1C5A5A"), // 深青
+        Color.parseColor("#3D5A1C"), // 深橄榄
+        Color.parseColor("#5A1C1C"), // 深红
     };
+
+    private static final float CORNER_RADIUS_DP = 12f;
+    private static final float FOCUS_SCALE = 1.12f;
+    private static final int FOCUS_ANIM_DURATION = 200;
 
     public TileAdapter(Context context, List<TileItem> items, OnTileClickListener listener) {
         this.context = context;
@@ -55,7 +59,7 @@ public class TileAdapter extends RecyclerView.Adapter<TileAdapter.TileViewHolder
     }
 
     @Override
-    public void onBindViewHolder(@NonNull TileViewHolder holder, int position) {
+    public void onBindViewHolder(@NonNull final TileViewHolder holder, int position) {
         final TileItem item = items.get(position);
         holder.tvName.setText(item.getName());
 
@@ -63,57 +67,78 @@ public class TileAdapter extends RecyclerView.Adapter<TileAdapter.TileViewHolder
         String levelText;
         switch (item.getLevel()) {
             case 1: levelText = "TV"; break;
-            case 2: levelText = "智能导航"; break;
-            case 3: levelText = "光标模式"; break;
+            case 2: levelText = "Smart Nav"; break;
+            case 3: levelText = "Cursor"; break;
             default: levelText = ""; break;
         }
         holder.tvLevel.setText(levelText);
 
-        // 背景色，使用 GradientDrawable 实现圆角+颜色
-        int colorIndex = position % TILE_COLORS.length;
-        float cornerRadius = context.getResources().getDisplayMetrics().density * 8; // 8dp
+        // 圆角背景色
+        final int bgColor = TILE_COLORS[position % TILE_COLORS.length];
+        final float density = context.getResources().getDisplayMetrics().density;
+        final float cornerRadius = CORNER_RADIUS_DP * density;
+
         GradientDrawable bgDrawable = new GradientDrawable();
         bgDrawable.setShape(GradientDrawable.RECTANGLE);
         bgDrawable.setCornerRadius(cornerRadius);
-        bgDrawable.setColor(TILE_COLORS[colorIndex]);
+        bgDrawable.setColor(bgColor);
         holder.cardBg.setBackground(bgDrawable);
 
-        // 焦点处理 - 获得焦点时放大+高亮边框，失去焦点时恢复
-        final int bgColor = TILE_COLORS[colorIndex];
-        final float cr = cornerRadius;
+        // 阴影初始隐藏
+        holder.shadow.setAlpha(0f);
+
+        // Apple TV 焦点效果
         holder.itemView.setOnFocusChangeListener(new View.OnFocusChangeListener() {
             @Override
             public void onFocusChange(View v, boolean hasFocus) {
                 if (hasFocus) {
-                    v.animate().scaleX(1.1f).scaleY(1.1f).setDuration(150).start();
-                    // 焦点时加高亮边框
+                    // 放大 + 浮起
+                    v.animate()
+                        .scaleX(FOCUS_SCALE).scaleY(FOCUS_SCALE)
+                        .setDuration(FOCUS_ANIM_DURATION)
+                        .start();
+
+                    // 白色光晕边框
                     GradientDrawable focused = new GradientDrawable();
                     focused.setShape(GradientDrawable.RECTANGLE);
-                    focused.setCornerRadius(cr);
-                    focused.setColor(bgColor);
-                    focused.setStroke((int)(3 * context.getResources().getDisplayMetrics().density),
-                            Color.parseColor("#FF6B35"));
-                    View bg = v.findViewById(R.id.tile_card_bg);
-                    if (bg != null) bg.setBackground(focused);
+                    focused.setCornerRadius(cornerRadius);
+                    focused.setColor(lightenColor(bgColor, 0.15f));
+                    focused.setStroke((int)(2 * density), Color.parseColor("#66FFFFFF"));
+                    holder.cardBg.setBackground(focused);
+
+                    // 阴影浮起
+                    holder.shadow.animate().alpha(0.6f).setDuration(FOCUS_ANIM_DURATION).start();
+
+                    // 提升层级 (API 21+)
                     if (Build.VERSION.SDK_INT >= 21) {
-                        v.setElevation(12f);
+                        v.setElevation(16f);
                     }
                 } else {
-                    v.animate().scaleX(1.0f).scaleY(1.0f).setDuration(150).start();
+                    // 恢复原始大小
+                    v.animate()
+                        .scaleX(1.0f).scaleY(1.0f)
+                        .rotationX(0f).rotationY(0f)
+                        .setDuration(FOCUS_ANIM_DURATION)
+                        .start();
+
+                    // 恢复默认背景
                     GradientDrawable normal = new GradientDrawable();
                     normal.setShape(GradientDrawable.RECTANGLE);
-                    normal.setCornerRadius(cr);
+                    normal.setCornerRadius(cornerRadius);
                     normal.setColor(bgColor);
-                    View bg = v.findViewById(R.id.tile_card_bg);
-                    if (bg != null) bg.setBackground(normal);
+                    holder.cardBg.setBackground(normal);
+
+                    // 阴影消失
+                    holder.shadow.animate().alpha(0f).setDuration(FOCUS_ANIM_DURATION).start();
+
                     if (Build.VERSION.SDK_INT >= 21) {
-                        v.setElevation(2f);
+                        v.setElevation(0f);
                     }
                 }
             }
         });
 
-        // 点击事件（遥控器 OK 键或菜单键触发）
+        // 点击事件（遥控器 OK 键触发）
         holder.itemView.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
@@ -122,6 +147,16 @@ public class TileAdapter extends RecyclerView.Adapter<TileAdapter.TileViewHolder
                 }
             }
         });
+    }
+
+    /**
+     * 将颜色提亮指定比例（Apple TV 焦点效果）
+     */
+    private static int lightenColor(int color, float fraction) {
+        int r = Math.min(255, (int)(Color.red(color) + 255 * fraction));
+        int g = Math.min(255, (int)(Color.green(color) + 255 * fraction));
+        int b = Math.min(255, (int)(Color.blue(color) + 255 * fraction));
+        return Color.rgb(r, g, b);
     }
 
     @Override
@@ -133,12 +168,14 @@ public class TileAdapter extends RecyclerView.Adapter<TileAdapter.TileViewHolder
         TextView tvName;
         TextView tvLevel;
         View cardBg;
+        View shadow;
 
         TileViewHolder(@NonNull View itemView) {
             super(itemView);
             tvName = itemView.findViewById(R.id.tv_tile_name);
             tvLevel = itemView.findViewById(R.id.tv_tile_level);
             cardBg = itemView.findViewById(R.id.tile_card_bg);
+            shadow = itemView.findViewById(R.id.tile_shadow);
             // 确保卡片可以接收 D-pad 焦点
             itemView.setFocusable(true);
             itemView.setFocusableInTouchMode(true);
