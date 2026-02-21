@@ -19,7 +19,13 @@ export class NavigationAgent {
   constructor(browserManager: BrowserManager, memoryStore: MemoryStore) {
     this.browserManager = browserManager;
     this.memoryStore = memoryStore;
-    this.client = new Anthropic({ apiKey: config.anthropicApiKey });
+    const clientOptions: { apiKey: string; baseURL?: string } = {
+      apiKey: config.anthropicApiKey,
+    };
+    if (config.anthropicBaseUrl) {
+      clientOptions.baseURL = config.anthropicBaseUrl;
+    }
+    this.client = new Anthropic(clientOptions);
   }
 
   // ================================================================

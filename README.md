@@ -78,6 +78,9 @@ npm run setup
 #    然后替换下面的 sk-ant-xxx：
 export ANTHROPIC_API_KEY=sk-ant-xxx
 
+# （可选）如果你用的不是 Anthropic 官方地址（比如代理、中转站），设置自定义地址：
+# export ANTHROPIC_BASE_URL=https://your-proxy.example.com
+
 # 6. 启动！
 npm run dev
 ```
@@ -365,6 +368,7 @@ TileTV/
 | 变量 | 干什么的 | 默认值 |
 |------|---------|--------|
 | `ANTHROPIC_API_KEY` | AI 密钥 | 必填 |
+| `ANTHROPIC_BASE_URL` | API 地址（代理/中转站用） | 留空=官方地址 |
 | `CLAUDE_MODEL` | AI 模型名 | `claude-haiku-4-5-20250315` |
 | `PORT` | 服务器端口 | `9870` |
 | `VIEWPORT_WIDTH` | 网页宽度 | `1280` |
