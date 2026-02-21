@@ -22,7 +22,7 @@ import okhttp3.Response;
 public class NavigationAgent {
 
     private static final String TAG = "NavigationAgent";
-    private static final int MAX_ITERATIONS = 15;
+    private static final int MAX_ITERATIONS = 50;
     private static final MediaType JSON_TYPE = MediaType.parse("application/json; charset=utf-8");
 
     private String apiKey;
@@ -132,6 +132,7 @@ public class NavigationAgent {
 
         // Agentic loop
         int iteration = 0;
+        java.util.List<String> actionHistory = new java.util.ArrayList<>();
         while (iteration < MAX_ITERATIONS && !isInterrupted) {
             iteration++;
             callback.onStatus("AI 思考中... (第" + iteration + "步)", "thinking");
@@ -252,10 +253,64 @@ public class NavigationAgent {
             toolResultMsg.put("role", "user");
             toolResultMsg.put("content", toolResults);
             messages.put(toolResultMsg);
+
+            // Stuck detection: 滑动窗口检测重复模式
+            StringBuilder actionSig = new StringBuilder();
+            for (int i = 0; i < toolUseBlocks.length(); i++) {
+                try {
+                    JSONObject tb = toolUseBlocks.getJSONObject(i);
+                    String tn = tb.getString("name");
+                    JSONObject ti = tb.optJSONObject("input");
+                    actionSig.append(tn);
+                    if ("click".equals(tn) && ti != null) {
+                        // 100px网格，更宽松地匹配相近点击
+                        int cx = (ti.optInt("x") / 100) * 100;
+                        int cy = (ti.optInt("y") / 100) * 100;
+                        actionSig.append(cx).append(",").append(cy);
+                    }
+                    actionSig.append("|");
+                } catch (JSONException ignored) {}
+            }
+            actionHistory.add(actionSig.toString());
+
+            int sz = actionHistory.size();
+            boolean stuck = false;
+
+            // 检测1：最后3步完全一样 (AAA)
+            if (sz >= 3
+                && actionHistory.get(sz-1).equals(actionHistory.get(sz-2))
+                && actionHistory.get(sz-2).equals(actionHistory.get(sz-3))) {
+                stuck = true;
+            }
+
+            // 检测2：最后6步形成ABABAB模式
+            if (!stuck && sz >= 6
+                && actionHistory.get(sz-1).equals(actionHistory.get(sz-3))
+                && actionHistory.get(sz-3).equals(actionHistory.get(sz-5))
+                && actionHistory.get(sz-2).equals(actionHistory.get(sz-4))) {
+                stuck = true;
+            }
+
+            // 检测3：最近8步中，type_text出现4次以上且URL未变（输入反复失败）
+            if (!stuck && sz >= 8) {
+                int typeCount = 0;
+                for (int hi = sz - 1; hi >= sz - 8; hi--) {
+                    if (actionHistory.get(hi).contains("type_text")) typeCount++;
+                }
+                String nowUrl = automation.getCurrentUrl();
+                if (typeCount >= 4 && nowUrl != null && nowUrl.equals(currentUrl)) {
+                    stuck = true;
+                }
+            }
+
+            if (stuck) {
+                callback.onStatus("AI 检测到重复操作循环，已停止", "done");
+                break;
+            }
         }
 
         if (iteration >= MAX_ITERATIONS) {
-            callback.onStatus("已达到最大步骤数", "done");
+            callback.onStatus("已达到最大步骤数(50步)，任务可能需要用户协助", "done");
         }
 
         // Update page info
@@ -583,18 +638,20 @@ public class NavigationAgent {
         return "你是一个电视遥控器AI助手。用户通过语音给你下达指令，你需要用工具操控浏览器来执行。\n\n"
                 + "你可以看到浏览器的截图（" + vw + "x" + vh + "像素），根据截图内容精确操作。\n\n"
                 + "操作规则:\n"
+                + "- 首先用 recall_memory 回忆此网站的操作经验，优先按记忆中的路径操作\n"
                 + "- 仔细观察截图，理解当前页面状态后再行动\n"
                 + "- 一步一步执行，每步操作后会自动获得新截图\n"
                 + "- 需要打开新网站时，用 navigate 工具\n"
-                + "- 搜索时：先用 click 点击搜索框 → 再用 type_text 输入文字 → 最后用 press_key 按 Enter\n"
-                + "- 如果输入框有旧文字，先用 click 点击它，再用 press_key(\"Control+a\") 全选，然后 type_text 输入新内容\n"
+                + "- 搜索时优先策略：直接用 navigate 跳转搜索URL（如 https://search.bilibili.com/all?keyword=关键词），比在搜索框输入更可靠\n"
+                + "- 如果必须用搜索框：click 点击 → type_text 输入 → press_key Enter。若2次无效则换 navigate\n"
+                + "- 常见搜索URL: B站 search.bilibili.com/all?keyword=, 百度 www.baidu.com/s?wd=, Google www.google.com/search?q=, YouTube www.youtube.com/results?search_query=\n"
+                + "- 如果输入框有旧文字，先 press_key(\"Control+a\") 全选，然后 type_text\n"
                 + "- 点击坐标要精确，仔细看截图中元素的位置\n"
                 + "- 页面跳转后用 wait 等待加载，再 screenshot 观察\n"
-                + "- 遇到弹窗/广告时尝试找关闭按钮点击，找不到就忽略继续操作\n"
-                + "- 某些网���的搜索会在新标签页中打开，按Enter后用 wait 等待加载\n"
-                + "- 操作完成后简短总结你做了什么\n"
-                + "- 如果用户纠正了你的操作，用 save_memory 记住这个纠正，下次不要犯同样的错误\n"
-                + "- 用 recall_memory 可以回忆之前保存的网站操作经验\n\n"
+                + "- 遇到弹窗/广告/登录框时，用 press_key(\"Escape\") 关闭，或点击关闭按钮，找不到就继续操作\n"
+                + "- 操作完成后简短总结，并用 save_memory 保存成功的操作路径（如\"搜索视频: navigate到search.bilibili.com → 点击结果 → 选集\"），下次可以更快\n"
+                + "- 如果用户纠正了你的操作，立即用 save_memory 记住纠正\n"
+                + "- 如果你发现自己在反复执行相同操作没效果，立即换策略\n\n"
                 + "当前URL: " + url
                 + (memoryContext != null && !memoryContext.isEmpty() ? "\n\n网站记忆:\n" + memoryContext : "");
     }

@@ -124,13 +124,42 @@ public class WebViewAutomation {
                             .replace("\n", "\\n")
                             .replace("\r", "");
                     String js = "(function(text){"
+                            // 找到目标input：优先activeElement，否则搜索页面可见input
                             + "var el=document.activeElement;"
-                            + "if(el&&(el.tagName==='INPUT'||el.tagName==='TEXTAREA'||el.isContentEditable)){"
-                            + "  el.focus();"
-                            + "  el.value=text;"
-                            + "  el.dispatchEvent(new Event('input',{bubbles:true}));"
-                            + "  el.dispatchEvent(new Event('change',{bubbles:true}));"
+                            + "if(!el||el===document.body||el===document.documentElement||"
+                            + "  (el.tagName!=='INPUT'&&el.tagName!=='TEXTAREA'&&!el.isContentEditable)){"
+                            + "  var inputs=document.querySelectorAll('input[type=text],input[type=search],input:not([type]),textarea');"
+                            + "  for(var j=0;j<inputs.length;j++){"
+                            + "    var r=inputs[j].getBoundingClientRect();"
+                            + "    if(r.width>0&&r.height>0&&r.top>=0&&r.top<300){"
+                            + "      el=inputs[j];break;"
+                            + "    }"
+                            + "  }"
                             + "}"
+                            + "if(!el||el===document.body)return;"
+                            + "el.focus();"
+                            // 策略1：execCommand insertText（最兼容React/Vue）
+                            + "try{"
+                            + "  if(el.select)el.select();"
+                            + "  else if(el.setSelectionRange)el.setSelectionRange(0,el.value?el.value.length:0);"
+                            + "  var ok=document.execCommand('insertText',false,text);"
+                            + "  if(ok&&el.value===text)return;"
+                            + "}catch(e){}"
+                            // 策略2：nativeInputValueSetter（绕过React拦截）
+                            + "try{"
+                            + "  var setter=Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype,'value');"
+                            + "  if(!setter)setter=Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype,'value');"
+                            + "  if(setter&&setter.set){"
+                            + "    setter.set.call(el,text);"
+                            + "    el.dispatchEvent(new InputEvent('input',{bubbles:true,cancelable:true,inputType:'insertText',data:text}));"
+                            + "    el.dispatchEvent(new Event('change',{bubbles:true}));"
+                            + "    if(el.value===text)return;"
+                            + "  }"
+                            + "}catch(e){}"
+                            // 策略3：直接设值+事件
+                            + "el.value=text;"
+                            + "el.dispatchEvent(new InputEvent('input',{bubbles:true,inputType:'insertText',data:text}));"
+                            + "el.dispatchEvent(new Event('change',{bubbles:true}));"
                             + "})('" + escapedText + "');";
                     webView.evaluateJavascript(js, null);
                 } catch (Exception e) {
@@ -159,12 +188,12 @@ public class WebViewAutomation {
                     } else {
                         int keyCode = mapKeyCode(key);
                         if (keyCode != -1) {
+                            // 发送 Android native KeyEvent
                             webView.dispatchKeyEvent(new KeyEvent(KeyEvent.ACTION_DOWN, keyCode));
                             webView.dispatchKeyEvent(new KeyEvent(KeyEvent.ACTION_UP, keyCode));
-                        } else {
-                            // Fallback: JS keyboard event
-                            dispatchJsKeyEvent(key);
                         }
+                        // 始终同时发送 JS KeyboardEvent，确保 React/Vue 等框架能收到
+                        dispatchJsKeyEvent(key);
                     }
                 } catch (Exception e) {
                     Log.e(TAG, "PressKey failed: " + key, e);
@@ -206,6 +235,14 @@ public class WebViewAutomation {
                 + "    key:'" + jsKey + "',keyCode:" + keyCode + ",which:" + keyCode
                 + ",bubbles:true,cancelable:true}));"
                 + "});"
+                // Enter键特殊处理：尝试提交表单或点击搜索按钮
+                + "if('" + jsKey + "'==='Enter'){"
+                + "  if(el.form){try{el.form.submit();}catch(e){}}"
+                + "  else{"
+                + "    var btn=document.querySelector('[type=submit],button.search-btn,.nav-search-btn,.search-button');"
+                + "    if(btn)try{btn.click();}catch(e){}"
+                + "  }"
+                + "}"
                 + "})();";
         webView.evaluateJavascript(js, null);
     }

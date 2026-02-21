@@ -73,6 +73,7 @@ public class TileTVServer {
     }
 
     public String getLocalIpAddress() {
+        // 方法1: 通过 WifiManager 获取（WiFi 场景）
         try {
             WifiManager wifiManager = (WifiManager) context.getApplicationContext()
                     .getSystemService(Context.WIFI_SERVICE);
@@ -80,14 +81,35 @@ public class TileTVServer {
                 WifiInfo wifiInfo = wifiManager.getConnectionInfo();
                 int ip = wifiInfo.getIpAddress();
                 if (ip != 0) {
-                    return String.format("%d.%d.%d.%d",
+                    String ipStr = String.format("%d.%d.%d.%d",
                             (ip & 0xff), (ip >> 8 & 0xff),
                             (ip >> 16 & 0xff), (ip >> 24 & 0xff));
+                    if (!"0.0.0.0".equals(ipStr)) return ipStr;
                 }
             }
         } catch (Exception e) {
-            Log.e(TAG, "Failed to get IP", e);
+            Log.e(TAG, "WiFi IP failed", e);
         }
+
+        // 方法2: 遍历网络接口（以太网/VPN等场景）
+        try {
+            java.util.Enumeration<java.net.NetworkInterface> interfaces =
+                    java.net.NetworkInterface.getNetworkInterfaces();
+            while (interfaces != null && interfaces.hasMoreElements()) {
+                java.net.NetworkInterface iface = interfaces.nextElement();
+                if (iface.isLoopback() || !iface.isUp()) continue;
+                java.util.Enumeration<java.net.InetAddress> addresses = iface.getInetAddresses();
+                while (addresses.hasMoreElements()) {
+                    java.net.InetAddress addr = addresses.nextElement();
+                    if (addr instanceof java.net.Inet4Address && !addr.isLoopbackAddress()) {
+                        return addr.getHostAddress();
+                    }
+                }
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "NetworkInterface IP failed", e);
+        }
+
         return "127.0.0.1";
     }
 

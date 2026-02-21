@@ -1,6 +1,7 @@
 package com.tiletv.app;
 
 import android.content.SharedPreferences;
+import android.graphics.Bitmap;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
@@ -8,11 +9,13 @@ import android.os.Looper;
 import android.util.Log;
 import android.view.KeyEvent;
 import android.view.View;
+import android.webkit.PermissionRequest;
 import android.webkit.WebChromeClient;
+import android.webkit.WebResourceRequest;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
-import android.widget.ScrollView;
+import android.widget.FrameLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -46,7 +49,6 @@ public class BrowserActivity extends AppCompatActivity {
     private TextView tvAiStep;
     private TextView tvAiIcon;
     private TextView tvAiLog;
-    private ScrollView aiLogScroll;
     private TextView tvH5Hint;
 
     private WebViewAutomation automation;
@@ -54,7 +56,13 @@ public class BrowserActivity extends AppCompatActivity {
     private MemoryStore memoryStore;
     private TileTVServer server;
 
+    // Video fullscreen support
+    private View customVideoView;
+    private WebChromeClient.CustomViewCallback customViewCallback;
+    private FrameLayout fullscreenContainer;
+
     private boolean cursorMode = false;
+    private boolean showAiOnTV = true; // AI操作过程在TV上的展示开关
     private long lastBackTime = 0;
     private static final long DOUBLE_BACK_THRESHOLD = 550;
 
@@ -62,7 +70,6 @@ public class BrowserActivity extends AppCompatActivity {
     private Runnable hideTopBarRunnable;
     private Runnable hideOverlayRunnable;
     private int stepCount = 0;
-    private StringBuilder logBuilder = new StringBuilder();
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -125,7 +132,6 @@ public class BrowserActivity extends AppCompatActivity {
         tvAiStep = findViewById(R.id.tv_ai_step);
         tvAiIcon = findViewById(R.id.tv_ai_icon);
         tvAiLog = findViewById(R.id.tv_ai_log);
-        aiLogScroll = findViewById(R.id.ai_log_scroll);
         tvH5Hint = findViewById(R.id.tv_h5_hint);
     }
 
@@ -139,22 +145,191 @@ public class BrowserActivity extends AppCompatActivity {
         settings.setBuiltInZoomControls(false);
         settings.setDisplayZoomControls(false);
         settings.setMediaPlaybackRequiresUserGesture(false);
+
+        // 允许混合内容（HTTPS页面加载HTTP资源）
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            settings.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
+        }
+
+        // 允许文件访问
+        settings.setAllowFileAccess(true);
+        settings.setAllowContentAccess(true);
+
+        // 数据库存储
+        settings.setDatabaseEnabled(true);
+
+        // PC Chrome UA — 最新版本，不包含任何 WebView 标识
         settings.setUserAgentString(
                 "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-                        + "(KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36");
+                        + "(KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36");
+
+        // 硬件加速层
+        webView.setLayerType(View.LAYER_TYPE_HARDWARE, null);
 
         webView.setWebViewClient(new WebViewClient() {
             @Override
+            public void onPageStarted(WebView view, String url, Bitmap favicon) {
+                super.onPageStarted(view, url, favicon);
+                // 尽早注入PC伪装脚本，在页面JS执行之前
+                injectPCBrowserEmulation(view);
+            }
+
+            @Override
             public void onPageFinished(WebView view, String url) {
                 super.onPageFinished(view, url);
+                // 页面加载���成后再次注入（确保覆盖动态检测）
+                injectPCBrowserEmulation(view);
                 tvTitle.setText(view.getTitle() != null ? view.getTitle() : url);
                 // Notify H5 clients about page change
                 if (server != null) {
                     server.broadcastPageInfo(url, view.getTitle() != null ? view.getTitle() : "");
                 }
             }
+
+            @SuppressWarnings("deprecation")
+            @Override
+            public boolean shouldOverrideUrlLoading(WebView view, String url) {
+                // 拦截跳转到App下载页，留在当前浏览器
+                if (url != null && (url.contains("app.bilibili.com")
+                        || url.contains("play.google.com/store")
+                        || url.contains("itunes.apple.com"))) {
+                    return true; // 阻止跳转
+                }
+                return false;
+            }
         });
-        webView.setWebChromeClient(new WebChromeClient());
+
+        // 增强WebChromeClient — 支持视频全屏和权限请求
+        fullscreenContainer = findViewById(android.R.id.content);
+        webView.setWebChromeClient(new WebChromeClient() {
+            @Override
+            public void onShowCustomView(View view, CustomViewCallback callback) {
+                // 视频全屏
+                if (customVideoView != null) {
+                    callback.onCustomViewHidden();
+                    return;
+                }
+                customVideoView = view;
+                customViewCallback = callback;
+                webView.setVisibility(View.GONE);
+                fullscreenContainer.addView(customVideoView,
+                        new FrameLayout.LayoutParams(
+                                FrameLayout.LayoutParams.MATCH_PARENT,
+                                FrameLayout.LayoutParams.MATCH_PARENT));
+                hideSystemUI();
+            }
+
+            @Override
+            public void onHideCustomView() {
+                if (customVideoView == null) return;
+                fullscreenContainer.removeView(customVideoView);
+                customVideoView = null;
+                webView.setVisibility(View.VISIBLE);
+                if (customViewCallback != null) {
+                    customViewCallback.onCustomViewHidden();
+                    customViewCallback = null;
+                }
+                hideSystemUI();
+            }
+
+            @Override
+            public void onPermissionRequest(PermissionRequest request) {
+                // 自动授权媒体播放权限（DRM等）
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                    request.grant(request.getResources());
+                }
+            }
+        });
+    }
+
+    /**
+     * 注入JS脚本深度伪装成PC Chrome浏览器，绕过所有移动端/WebView检测。
+     */
+    private void injectPCBrowserEmulation(WebView view) {
+        String js = "(function(){"
+            + "if(window.__pcEmulationDone)return;"
+            + "window.__pcEmulationDone=true;"
+
+            // === Navigator 属性覆盖 ===
+            + "try{Object.defineProperty(navigator,'platform',{get:function(){return 'Win32';},configurable:true});}catch(e){}"
+            + "try{Object.defineProperty(navigator,'maxTouchPoints',{get:function(){return 0;},configurable:true});}catch(e){}"
+            + "try{Object.defineProperty(navigator,'vendor',{get:function(){return 'Google Inc.';},configurable:true});}catch(e){}"
+            + "try{Object.defineProperty(navigator,'webdriver',{get:function(){return false;},configurable:true});}catch(e){}"
+            + "try{Object.defineProperty(navigator,'languages',{get:function(){return['zh-CN','zh','en'];},configurable:true});}catch(e){}"
+
+            // === window.chrome 对象（真Chrome有，WebView没有）===
+            + "if(!window.chrome){window.chrome={runtime:{id:undefined,connect:function(){},sendMessage:function(){},onMessage:{addListener:function(){}}},app:{isInstalled:false},csi:function(){return{};},loadTimes:function(){return{};}};};"
+
+            // === navigator.plugins ===
+            + "try{Object.defineProperty(navigator,'plugins',{get:function(){"
+            + "var p=[{name:'Chrome PDF Plugin',filename:'internal-pdf-viewer',description:'Portable Document Format',length:1},"
+            + "{name:'Chrome PDF Viewer',filename:'mhjfbmdgcfjbbpaeojofohoefgiehjai',description:'',length:1},"
+            + "{name:'Native Client',filename:'internal-nacl-plugin',description:'',length:2}];"
+            + "p.namedItem=function(n){for(var i=0;i<this.length;i++){if(this[i].name===n)return this[i];}return null;};"
+            + "p.refresh=function(){};"
+            + "return p;},configurable:true});}catch(e){}"
+
+            // === navigator.mimeTypes ===
+            + "try{Object.defineProperty(navigator,'mimeTypes',{get:function(){"
+            + "var m=[{type:'application/pdf',suffixes:'pdf',description:'Portable Document Format'}];"
+            + "m.namedItem=function(n){for(var i=0;i<this.length;i++){if(this[i].type===n)return this[i];}return null;};"
+            + "return m;},configurable:true});}catch(e){}"
+
+            // === 移除 WebView/移动端特征 ===
+            + "try{delete window.__wbRenderOpt;delete window.__IS_WEBVIEW__;delete window.__IS_ANDROID__;}catch(e){}"
+
+            // === Screen 尺寸 ===
+            + "try{"
+            + "Object.defineProperty(screen,'width',{get:function(){return 1920;},configurable:true});"
+            + "Object.defineProperty(screen,'height',{get:function(){return 1080;},configurable:true});"
+            + "Object.defineProperty(screen,'availWidth',{get:function(){return 1920;},configurable:true});"
+            + "Object.defineProperty(screen,'availHeight',{get:function(){return 1040;},configurable:true});"
+            + "Object.defineProperty(screen,'colorDepth',{get:function(){return 24;},configurable:true});"
+            + "Object.defineProperty(screen,'pixelDepth',{get:function(){return 24;},configurable:true});"
+            + "}catch(e){}"
+
+            // === Window 尺寸（匹配桌面视口）===
+            + "try{"
+            + "Object.defineProperty(window,'innerWidth',{get:function(){return 1920;},configurable:true});"
+            + "Object.defineProperty(window,'innerHeight',{get:function(){return 969;},configurable:true});"
+            + "Object.defineProperty(window,'outerWidth',{get:function(){return 1920;},configurable:true});"
+            + "Object.defineProperty(window,'outerHeight',{get:function(){return 1040;},configurable:true});"
+            + "Object.defineProperty(document.documentElement,'clientWidth',{get:function(){return 1920;},configurable:true});"
+            + "Object.defineProperty(document.documentElement,'clientHeight',{get:function(){return 969;},configurable:true});"
+            + "}catch(e){}"
+
+            // === 触摸事件检测 ===
+            + "try{Object.defineProperty(window,'ontouchstart',{get:function(){return undefined;},set:function(){},configurable:true});}catch(e){}"
+            + "try{Object.defineProperty(window,'ontouchend',{get:function(){return undefined;},set:function(){},configurable:true});}catch(e){}"
+            + "try{Object.defineProperty(window,'ontouchmove',{get:function(){return undefined;},set:function(){},configurable:true});}catch(e){}"
+
+            // === navigator.connection（移除移动端网络信息）===
+            + "try{Object.defineProperty(navigator,'connection',{get:function(){return undefined;},configurable:true});}catch(e){}"
+
+            // === matchMedia 拦截（桌面指针/hover检测）===
+            + "try{"
+            + "var origMatch=window.matchMedia.bind(window);"
+            + "window.matchMedia=function(q){"
+            + "  if(q.indexOf('pointer')!==-1&&q.indexOf('coarse')!==-1)q=q.replace('coarse','fine');"
+            + "  if(q.indexOf('hover')!==-1&&q.indexOf('none')!==-1)q=q.replace('hover: none','hover: hover').replace('hover:none','hover:hover');"
+            + "  return origMatch(q);"
+            + "};"
+            + "}catch(e){}"
+
+            // === devicePixelRatio（桌面通常为1）===
+            + "try{Object.defineProperty(window,'devicePixelRatio',{get:function(){return 1;},configurable:true});}catch(e){}"
+
+            // === Permissions API（桌面Chrome特征）===
+            + "try{if(navigator.permissions&&navigator.permissions.query){"
+            + "var origQuery=navigator.permissions.query.bind(navigator.permissions);"
+            + "navigator.permissions.query=function(desc){"
+            + "  if(desc.name==='notifications')return Promise.resolve({state:'prompt'});"
+            + "  return origQuery(desc);"
+            + "};"
+            + "}}catch(e){}"
+
+            + "})();";
+        view.evaluateJavascript(js, null);
     }
 
     private void setupAI() {
@@ -173,7 +348,14 @@ public class BrowserActivity extends AppCompatActivity {
         server = TileTVApp.getServer();
         if (server != null) {
             if (tvH5Hint != null) {
-                tvH5Hint.setText("H5: " + server.getH5Url());
+                String h5Url = server.getH5Url();
+                String ip = server.getLocalIpAddress();
+                if ("127.0.0.1".equals(ip) || ip.startsWith("10.0.2.") || ip.startsWith("10.0.3.")) {
+                    // 模拟器环境，提示使用 adb forward
+                    tvH5Hint.setText("H5: localhost:9870 (模拟器)");
+                } else {
+                    tvH5Hint.setText("H5: " + h5Url);
+                }
             }
             server.setMessageListener(new TileTVServer.MessageListener() {
                 @Override
@@ -221,6 +403,21 @@ public class BrowserActivity extends AppCompatActivity {
                     }
                     break;
 
+                case "toggle_overlay":
+                    uiHandler.post(new Runnable() {
+                        @Override
+                        public void run() {
+                            showAiOnTV = !showAiOnTV;
+                            if (!showAiOnTV) {
+                                aiOverlay.setVisibility(View.GONE);
+                            }
+                            Toast.makeText(BrowserActivity.this,
+                                "AI展示: " + (showAiOnTV ? "开" : "关"), Toast.LENGTH_SHORT).show();
+                            if (server != null) server.broadcastToast("TV AI展示: " + (showAiOnTV ? "开" : "关"));
+                        }
+                    });
+                    break;
+
                 case "ping":
                     // Send current page info + screenshot
                     new Thread(new Runnable() {
@@ -252,7 +449,8 @@ public class BrowserActivity extends AppCompatActivity {
 
     private void executeVoiceCommand(String text) {
         stepCount = 0;
-        logBuilder.setLength(0);
+        tvAiLog.setText("");
+        tvAiLog.setVisibility(View.GONE);
 
         agent.handleVoiceCommand(text, new NavigationAgent.Callback() {
             @Override
@@ -314,6 +512,10 @@ public class BrowserActivity extends AppCompatActivity {
     // ====== AI Overlay ======
 
     private void showAiOverlay(String text, String level) {
+        // 如果TV端展示关闭，只有 error 级别才强制显示
+        if (!showAiOnTV && !"error".equals(level)) {
+            return;
+        }
         uiHandler.removeCallbacks(hideOverlayRunnable);
         aiOverlay.setVisibility(View.VISIBLE);
         aiOverlay.setAlpha(1f);
@@ -335,16 +537,8 @@ public class BrowserActivity extends AppCompatActivity {
     }
 
     private void appendLog(String text) {
-        if (logBuilder.length() > 0) logBuilder.append("\n");
-        logBuilder.append(text);
-        tvAiLog.setText(logBuilder.toString());
-        aiLogScroll.setVisibility(View.VISIBLE);
-        aiLogScroll.post(new Runnable() {
-            @Override
-            public void run() {
-                aiLogScroll.fullScroll(ScrollView.FOCUS_DOWN);
-            }
-        });
+        tvAiLog.setText(text);
+        tvAiLog.setVisibility(View.VISIBLE);
     }
 
     // ====== Top Bar ======
@@ -378,6 +572,21 @@ public class BrowserActivity extends AppCompatActivity {
                 return true;
             }
             finish();
+            return true;
+        }
+
+        // MENU键切换AI展示
+        if (keyCode == KeyEvent.KEYCODE_MENU) {
+            showAiOnTV = !showAiOnTV;
+            if (!showAiOnTV) {
+                // 立即隐藏overlay
+                aiOverlay.setVisibility(View.GONE);
+                Toast.makeText(this, "AI展示: 关", Toast.LENGTH_SHORT).show();
+            } else {
+                Toast.makeText(this, "AI展示: 开", Toast.LENGTH_SHORT).show();
+            }
+            // 通知H5客户端
+            if (server != null) server.broadcastToast("TV AI展示: " + (showAiOnTV ? "开" : "关"));
             return true;
         }
 

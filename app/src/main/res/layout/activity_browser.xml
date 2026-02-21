@@ -17,24 +17,26 @@
         android:layout_height="match_parent"
         android:visibility="gone" />
 
-    <!-- AI浮动状态悬浮层(底部) -->
+    <!-- AI浮动状态(底部居中,紧凑) -->
     <LinearLayout
         android:id="@+id/ai_overlay"
-        android:layout_width="match_parent"
+        android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_gravity="bottom"
-        android:layout_marginLeft="24dp"
-        android:layout_marginRight="24dp"
-        android:layout_marginBottom="20dp"
+        android:layout_gravity="bottom|center_horizontal"
+        android:layout_marginBottom="16dp"
+        android:minWidth="200dp"
         android:orientation="vertical"
         android:background="@drawable/bg_ai_overlay"
-        android:padding="16dp"
+        android:paddingLeft="14dp"
+        android:paddingRight="14dp"
+        android:paddingTop="8dp"
+        android:paddingBottom="8dp"
         android:visibility="gone"
         android:elevation="8dp">
 
         <!-- 状态行 -->
         <LinearLayout
-            android:layout_width="match_parent"
+            android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:orientation="horizontal"
             android:gravity="center_vertical">
@@ -44,46 +46,41 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="✦"
-                android:textSize="16sp"
+                android:textSize="13sp"
                 android:textColor="#0A84FF"
-                android:layout_marginRight="10dp" />
+                android:layout_marginRight="6dp" />
 
             <TextView
                 android:id="@+id/tv_ai_status"
-                android:layout_width="0dp"
+                android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_weight="1"
                 android:textColor="#FFFFFF"
-                android:textSize="13sp"
+                android:textSize="12sp"
                 android:singleLine="true"
-                android:ellipsize="end" />
+                android:ellipsize="end"
+                android:maxWidth="280dp" />
 
             <TextView
                 android:id="@+id/tv_ai_step"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:textColor="#0A84FF"
-                android:textSize="11sp" />
+                android:textSize="10sp"
+                android:layout_marginLeft="8dp" />
         </LinearLayout>
 
-        <!-- 操作日志(可滚动,最多显示3行) -->
-        <ScrollView
-            android:id="@+id/ai_log_scroll"
-            android:layout_width="match_parent"
+        <!-- 最近操作(仅1行) -->
+        <TextView
+            android:id="@+id/tv_ai_log"
+            android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:maxHeight="60dp"
-            android:layout_marginTop="6dp"
-            android:visibility="gone">
-
-            <TextView
-                android:id="@+id/tv_ai_log"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:textColor="#98989D"
-                android:textSize="11sp"
-                android:fontFamily="monospace"
-                android:lineSpacingExtra="2dp" />
-        </ScrollView>
+            android:textColor="#98989D"
+            android:textSize="10sp"
+            android:singleLine="true"
+            android:ellipsize="end"
+            android:maxWidth="280dp"
+            android:layout_marginTop="2dp"
+            android:visibility="gone" />
     </LinearLayout>
 
     <!-- 顶部标题栏(半透明,自动隐藏) -->

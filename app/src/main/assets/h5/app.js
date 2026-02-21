@@ -228,6 +228,16 @@
     })(shortcutBtns[i]);
   }
 
+  // ====== Toggle TV Overlay ======
+  var toggleOverlayBtn = document.getElementById('toggleOverlayBtn');
+  if (toggleOverlayBtn) {
+    toggleOverlayBtn.addEventListener('click', function() {
+      safeSend({ type: 'toggle_overlay' });
+      toggleOverlayBtn.style.transform = 'scale(0.94)';
+      setTimeout(function() { toggleOverlayBtn.style.transform = ''; }, 150);
+    });
+  }
+
   // ====== Toast ======
   function showToast(text) {
     var toast = document.createElement('div');
