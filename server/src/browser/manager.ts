@@ -42,6 +42,19 @@ export class BrowserManager {
     });
 
     this.page = await this.context.newPage();
+
+    // Auto-switch to new tabs/popups (e.g. bilibili search opens in new tab)
+    this.context.on('page', async (newPage) => {
+      try {
+        await newPage.waitForLoadState('domcontentloaded', { timeout: 10_000 });
+        this.page = newPage;
+        console.log(`[BrowserManager] Switched to new tab: ${newPage.url()}`);
+        await this.injectStyles();
+      } catch (err) {
+        console.warn(`[BrowserManager] New tab error: ${(err as Error).message}`);
+      }
+    });
+
     console.log(
       `[BrowserManager] Chromium launched ${config.viewportWidth}x${config.viewportHeight} headless=${config.browserHeadless}`,
     );
@@ -62,6 +75,15 @@ export class BrowserManager {
     this.context = null;
     this.browser = null;
     console.log('[BrowserManager] Closed');
+  }
+
+  // ------------------------------------------------------------------
+  // Page access (for computer-use tool)
+  // ------------------------------------------------------------------
+
+  getPage(): Page {
+    this.ensurePage();
+    return this.page!;
   }
 
   // ------------------------------------------------------------------

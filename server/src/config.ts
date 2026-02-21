@@ -20,7 +20,7 @@ function getEnvBoolean(key: string, defaultValue: boolean): boolean {
 export const config = {
   anthropicApiKey: getEnvString('ANTHROPIC_API_KEY', ''),
   anthropicBaseUrl: getEnvString('ANTHROPIC_BASE_URL', ''),
-  claudeModel: getEnvString('CLAUDE_MODEL', 'claude-haiku-4-5-20250315'),
+  claudeModel: getEnvString('CLAUDE_MODEL', 'claude-haiku-4-5-20251001'),
   port: getEnvNumber('PORT', 9870),
   viewportWidth: getEnvNumber('VIEWPORT_WIDTH', 1280),
   viewportHeight: getEnvNumber('VIEWPORT_HEIGHT', 720),

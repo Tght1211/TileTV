@@ -56,19 +56,23 @@ export function createConnectionHandler(
       try {
         switch (msg.type) {
           case 'open': {
-            sendStatus(`正在打开 ${msg.name}...`, 'info');
+            sendStatus(`正在打开 ${msg.name}...`, 'thinking');
             await browserManager.navigate(msg.url);
             agent.clearNavMap();
 
-            // Send initial screenshot
+            // Send screenshot
             const frame = await browserManager.screenshot();
             sendFrame(frame);
 
-            // Auto-analyze page
-            await agent.analyzePage(sendStatus);
+            // Update URL display
+            const info = await browserManager.getCurrentInfo();
+            send({
+              type: 'pong',
+              url: info.url,
+              title: info.title || msg.name,
+            });
 
-            // Send post-analysis screenshot (with highlight)
-            sendFrame(await browserManager.screenshot());
+            sendStatus(`已打开 ${msg.name}`, 'done');
             break;
           }
 
@@ -91,11 +95,21 @@ export function createConnectionHandler(
           }
 
           case 'voice': {
+            // Pass sendFrame so AI can send intermediate screenshots
             const voiceScreenshot = await agent.handleVoiceCommand(
               msg.text,
               sendStatus,
+              sendFrame,
             );
             sendFrame(voiceScreenshot);
+
+            // Update URL display (page may have changed)
+            const voiceInfo = await browserManager.getCurrentInfo();
+            send({
+              type: 'pong',
+              url: voiceInfo.url,
+              title: voiceInfo.title,
+            });
             break;
           }
 
@@ -117,16 +131,28 @@ export function createConnectionHandler(
 
           case 'ping': {
             const info = await browserManager.getCurrentInfo();
-            send({ type: 'pong', url: info.url, title: info.title });
+            // Also send current screenshot
+            const frame = await browserManager.screenshot();
+            send({
+              type: 'pong',
+              url: info.url,
+              title: info.title,
+              frame: frame.toString('base64'),
+            } as ServerMessage & { frame: string });
             break;
           }
 
           default: {
-            console.warn(`[WS] Unknown message type: ${(msg as { type: string }).type}`);
+            console.warn(
+              `[WS] Unknown message type: ${(msg as { type: string }).type}`,
+            );
           }
         }
       } catch (err) {
-        console.error(`[WS] Error handling message "${msg.type}":`, (err as Error).message);
+        console.error(
+          `[WS] Error handling message "${msg.type}":`,
+          (err as Error).message,
+        );
         sendStatus(`处理出错: ${(err as Error).message}`, 'error');
       }
     });

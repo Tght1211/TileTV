@@ -3,46 +3,48 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <meta name="theme-color" content="#000000">
+  <meta name="theme-color" content="#1a1a2e">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="format-detection" content="telephone=no">
-  <title>TileTV 语音控制</title>
+  <title>TileTV Remote</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
   <!-- 连接状态栏 -->
   <div class="status-bar">
-    <div class="status-dot"></div>
-    <span class="status-text">未连接</span>
+    <div class="status-dot" id="statusDot"></div>
+    <span class="status-text" id="statusText">连接中...</span>
   </div>
 
-  <!-- 主内容区 -->
   <div class="container">
-    <!-- 当前页面预览 -->
+    <!-- 页面预览 -->
     <div class="preview-card glass">
       <div class="preview-header">
-        <span class="preview-title">当前页面</span>
+        <span class="preview-title">TV 画面</span>
         <span class="preview-url" id="currentUrl">等待连接...</span>
       </div>
       <div class="preview-image-wrapper">
-        <img id="previewImage" class="preview-image" alt="页面预览" />
+        <img id="previewImage" class="preview-image" alt="TV Preview" />
         <div class="preview-placeholder" id="previewPlaceholder">
           <div class="placeholder-icon">📺</div>
-          <div class="placeholder-text">连接服务器后显示页面</div>
+          <div class="placeholder-text">连接TV后显示画面</div>
         </div>
       </div>
     </div>
 
-    <!-- AI状态消息 -->
+    <!-- AI状态 -->
     <div class="ai-status glass" id="aiStatus">
-      <div class="ai-icon">✦</div>
+      <div class="ai-icon" id="aiIcon">✦</div>
       <span class="ai-text" id="aiText">AI 就绪</span>
+      <button class="interrupt-btn" id="interruptBtn" style="display:none">打断</button>
     </div>
 
     <!-- AI操作日志 -->
     <div class="ai-log glass" id="aiLog" style="display:none">
-      <div class="ai-log-title">AI 操作过程</div>
+      <div class="ai-log-header">
+        <span class="ai-log-title">AI 操作过程</span>
+        <span class="ai-log-step" id="aiLogStep"></span>
+      </div>
       <div class="ai-log-list" id="aiLogList"></div>
     </div>
 
@@ -50,7 +52,7 @@
     <div class="voice-section">
       <div class="voice-ring" id="voiceRing"></div>
       <button class="voice-btn" id="voiceBtn" aria-label="长按说话">
-        <svg class="mic-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <svg class="mic-icon" viewBox="0 0 24 24" fill="none">
           <rect x="9" y="2" width="6" height="12" rx="3" fill="currentColor"/>
           <path d="M5 10V12C5 15.866 8.134 19 12 19C15.866 19 19 15.866 19 12V10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
           <line x1="12" y1="19" x2="12" y2="23" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
@@ -73,7 +75,7 @@
       </div>
     </div>
 
-    <!-- 文字输入区 -->
+    <!-- 文字输入 -->
     <div class="text-input-section glass">
       <input type="text" class="text-input" id="textInput" placeholder="输入指令或网址..." autocomplete="off" />
       <button class="send-btn" id="sendBtn">发送</button>

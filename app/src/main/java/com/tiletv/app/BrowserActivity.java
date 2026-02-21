@@ -1,60 +1,58 @@
 package com.tiletv.app;
 
-import android.graphics.Bitmap;
-import android.graphics.BitmapFactory;
+import android.content.SharedPreferences;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
-import android.util.Base64;
+import android.util.Log;
 import android.view.KeyEvent;
 import android.view.View;
+import android.webkit.WebChromeClient;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
-import android.widget.ImageView;
+import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
 
-import com.tiletv.app.widget.FocusOverlayView;
+import com.tiletv.app.ai.MemoryStore;
+import com.tiletv.app.ai.NavigationAgent;
+import com.tiletv.app.ai.WebViewAutomation;
+import com.tiletv.app.server.TileTVServer;
 import com.tiletv.app.widget.VirtualCursorView;
-import com.tiletv.app.ws.WebSocketManager;
 
 import org.json.JSONException;
 import org.json.JSONObject;
 
 /**
- * Browser Activity - displays web content in two modes.
- *
- * Server mode (default when connected):
- * - Full screen ImageView displays JPEG screenshots pushed from the backend via WebSocket
- * - D-pad keys send navigation commands to the server; AI decides how to operate
- * - FocusOverlayView shows the focus rectangle overlay on top of the screenshot
- * - Top bar shows site name + AI status text, auto-hides after 3 seconds
- * - Double-tap BACK to toggle between AI navigation mode and cursor mode
- *
- * Local mode (offline fallback when server is not connected):
- * - WebView loads the URL directly
- * - VirtualCursorView overlay for cursor-based navigation
- * - Similar to the v1 Level 3 cursor mode
+ * Browser Activity v3 - WebView + AI Agent + 内嵌服务器通信。
+ * TV端直接显示WebView，AI通过WebViewAutomation控制。
+ * H5端通过TileTVServer的WebSocket发送指令。
  */
 public class BrowserActivity extends AppCompatActivity {
 
-    private ImageView ivBrowser;
+    private static final String TAG = "BrowserActivity";
+    private static final String PREFS_NAME = "tiletv_prefs";
+
     private WebView webView;
-    private FocusOverlayView focusOverlay;
     private VirtualCursorView cursorView;
     private View topBar;
+    private View aiOverlay;
     private TextView tvTitle;
     private TextView tvAiStatus;
-    private TextView tvModeIndicator;
+    private TextView tvAiStep;
+    private TextView tvAiIcon;
+    private TextView tvAiLog;
+    private ScrollView aiLogScroll;
+    private TextView tvH5Hint;
 
-    private String mode;
-    private String siteName;
-    private String siteUrl;
-    private int siteLevel;
+    private WebViewAutomation automation;
+    private NavigationAgent agent;
+    private MemoryStore memoryStore;
+    private TileTVServer server;
 
     private boolean cursorMode = false;
     private long lastBackTime = 0;
@@ -62,6 +60,9 @@ public class BrowserActivity extends AppCompatActivity {
 
     private Handler uiHandler = new Handler(Looper.getMainLooper());
     private Runnable hideTopBarRunnable;
+    private Runnable hideOverlayRunnable;
+    private int stepCount = 0;
+    private StringBuilder logBuilder = new StringBuilder();
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -69,31 +70,35 @@ public class BrowserActivity extends AppCompatActivity {
         setContentView(R.layout.activity_browser);
         hideSystemUI();
 
-        mode = getIntent().getStringExtra("mode");
-        siteUrl = getIntent().getStringExtra("url");
-        siteName = getIntent().getStringExtra("name");
-        siteLevel = getIntent().getIntExtra("level", 2);
-
-        if (mode == null) {
-            mode = "local";
-        }
-
         initViews();
+        setupWebView();
+        setupAI();
+        setupServer();
+
+        String url = getIntent().getStringExtra("url");
+        String name = getIntent().getStringExtra("name");
+        if (name != null) tvTitle.setText(name);
+        if (url != null && !url.isEmpty()) {
+            webView.loadUrl(url);
+        }
 
         hideTopBarRunnable = new Runnable() {
             @Override
             public void run() {
-                if (topBar != null) {
-                    topBar.animate().alpha(0f).setDuration(300).start();
-                }
+                if (topBar != null) topBar.animate().alpha(0f).setDuration(300).start();
+            }
+        };
+        hideOverlayRunnable = new Runnable() {
+            @Override
+            public void run() {
+                if (aiOverlay != null) aiOverlay.animate().alpha(0f).setDuration(500).withEndAction(new Runnable() {
+                    @Override
+                    public void run() { aiOverlay.setVisibility(View.GONE); }
+                }).start();
             }
         };
 
-        if ("server".equals(mode)) {
-            setupServerMode();
-        } else {
-            setupLocalMode();
-        }
+        showTopBar();
     }
 
     @SuppressWarnings("deprecation")
@@ -107,225 +112,255 @@ public class BrowserActivity extends AppCompatActivity {
                             | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
                             | View.SYSTEM_UI_FLAG_FULLSCREEN
                             | View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY);
-        } else {
-            decorView.setSystemUiVisibility(
-                    View.SYSTEM_UI_FLAG_LOW_PROFILE
-                            | View.SYSTEM_UI_FLAG_FULLSCREEN);
         }
     }
 
     private void initViews() {
-        ivBrowser = findViewById(R.id.iv_browser);
         webView = findViewById(R.id.webview);
-        focusOverlay = findViewById(R.id.focus_overlay);
         cursorView = findViewById(R.id.virtual_cursor);
         topBar = findViewById(R.id.top_bar);
+        aiOverlay = findViewById(R.id.ai_overlay);
         tvTitle = findViewById(R.id.tv_title);
         tvAiStatus = findViewById(R.id.tv_ai_status);
-        tvModeIndicator = findViewById(R.id.tv_mode_indicator);
+        tvAiStep = findViewById(R.id.tv_ai_step);
+        tvAiIcon = findViewById(R.id.tv_ai_icon);
+        tvAiLog = findViewById(R.id.tv_ai_log);
+        aiLogScroll = findViewById(R.id.ai_log_scroll);
+        tvH5Hint = findViewById(R.id.tv_h5_hint);
     }
-
-    // ========================================================================
-    // Server Mode
-    // ========================================================================
-
-    private void setupServerMode() {
-        ivBrowser.setVisibility(View.VISIBLE);
-        webView.setVisibility(View.GONE);
-        focusOverlay.setVisibility(View.VISIBLE);
-        cursorView.setVisibility(View.GONE);
-        cursorView.setServerMode(true);
-
-        if (tvModeIndicator != null) {
-            tvModeIndicator.setText("AI Nav");
-            tvModeIndicator.setVisibility(View.VISIBLE);
-        }
-
-        // Register WebSocket message listener
-        WebSocketManager.getInstance().setCallback(new WebSocketManager.Callback() {
-            @Override
-            public void onConnected() {
-                uiHandler.post(new Runnable() {
-                    @Override
-                    public void run() {
-                        tvAiStatus.setText("已连接");
-                        showTopBar();
-                    }
-                });
-            }
-
-            @Override
-            public void onDisconnected() {
-                uiHandler.post(new Runnable() {
-                    @Override
-                    public void run() {
-                        tvAiStatus.setText("连接断开");
-                        showTopBar();
-                    }
-                });
-            }
-
-            @Override
-            public void onMessage(final String message) {
-                uiHandler.post(new Runnable() {
-                    @Override
-                    public void run() {
-                        handleServerMessage(message);
-                    }
-                });
-            }
-        });
-
-        tvTitle.setText(siteName);
-        showTopBar();
-    }
-
-    /**
-     * Handle incoming WebSocket messages from the server.
-     */
-    private void handleServerMessage(String json) {
-        try {
-            JSONObject msg = new JSONObject(json);
-            String type = msg.getString("type");
-
-            if ("frame".equals(type)) {
-                // Decode base64 JPEG and display
-                String data = msg.getString("data");
-                byte[] bytes = Base64.decode(data, Base64.DEFAULT);
-                Bitmap bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.length);
-                if (bitmap != null) {
-                    // Recycle old bitmap to prevent memory leak
-                    Bitmap old = (Bitmap) ivBrowser.getTag();
-                    ivBrowser.setImageBitmap(bitmap);
-                    ivBrowser.setTag(bitmap);
-                    if (old != null && !old.isRecycled()) {
-                        old.recycle();
-                    }
-                }
-            } else if ("status".equals(type)) {
-                String text = msg.optString("text", "");
-                String level = msg.optString("level", "info");
-                tvAiStatus.setText(text);
-
-                // Color based on status level
-                if ("error".equals(level)) {
-                    tvAiStatus.setTextColor(0xFFFF453A); // Red
-                } else if ("thinking".equals(level)) {
-                    tvAiStatus.setTextColor(0xFFFFD60A); // Yellow
-                } else if ("done".equals(level)) {
-                    tvAiStatus.setTextColor(0xFF30D158); // Green
-                } else {
-                    tvAiStatus.setTextColor(0xFF8E8E93); // Gray
-                }
-                showTopBar();
-            } else if ("focus".equals(type)) {
-                if (msg.isNull("rect")) {
-                    focusOverlay.clearFocus();
-                } else {
-                    JSONObject rect = msg.getJSONObject("rect");
-                    // Scale from server viewport coordinates to local view coordinates
-                    int viewWidth = ivBrowser.getWidth();
-                    int viewHeight = ivBrowser.getHeight();
-                    int serverWidth = msg.optInt("width", 1280);
-                    int serverHeight = msg.optInt("height", 720);
-
-                    float scaleX = viewWidth > 0 ? (float) viewWidth / serverWidth : 1f;
-                    float scaleY = viewHeight > 0 ? (float) viewHeight / serverHeight : 1f;
-
-                    focusOverlay.setFocusRect(
-                            (int) (rect.getInt("x") * scaleX),
-                            (int) (rect.getInt("y") * scaleY),
-                            (int) (rect.getInt("w") * scaleX),
-                            (int) (rect.getInt("h") * scaleY)
-                    );
-
-                    String label = msg.optString("label", "");
-                    if (label.length() > 0) {
-                        focusOverlay.setLabel(label);
-                    }
-                }
-            } else if ("toast".equals(type)) {
-                String text = msg.getString("text");
-                Toast.makeText(BrowserActivity.this, text, Toast.LENGTH_SHORT).show();
-                // If server says "this is the last page", finish the activity
-                if ("\u5DF2\u662F\u6700\u540E\u4E00\u9875".equals(text)) {
-                    finish();
-                }
-            } else if ("pong".equals(type)) {
-                String title = msg.optString("title", "");
-                if (title.length() > 0) {
-                    tvTitle.setText(title);
-                }
-            } else if ("memory".equals(type)) {
-                String summary = msg.optString("summary", "");
-                if (summary.length() > 0) {
-                    tvAiStatus.setText(summary);
-                    showTopBar();
-                }
-            }
-        } catch (JSONException e) {
-            e.printStackTrace();
-        }
-    }
-
-    // ========================================================================
-    // Local Mode (offline fallback)
-    // ========================================================================
 
     @SuppressWarnings("deprecation")
-    private void setupLocalMode() {
-        ivBrowser.setVisibility(View.GONE);
-        webView.setVisibility(View.VISIBLE);
-        focusOverlay.setVisibility(View.GONE);
-        cursorView.setVisibility(View.VISIBLE);
-        cursorView.setServerMode(false);
-        cursorView.attachToWebView(webView);
-        cursorView.setCursorEnabled(true);
-        cursorMode = true;
-
-        if (tvModeIndicator != null) {
-            tvModeIndicator.setText("离线");
-            tvModeIndicator.setVisibility(View.VISIBLE);
-        }
-
-        // Configure WebView
+    private void setupWebView() {
         WebSettings settings = webView.getSettings();
         settings.setJavaScriptEnabled(true);
         settings.setDomStorageEnabled(true);
         settings.setUseWideViewPort(true);
         settings.setLoadWithOverviewMode(true);
         settings.setBuiltInZoomControls(false);
+        settings.setDisplayZoomControls(false);
+        settings.setMediaPlaybackRequiresUserGesture(false);
         settings.setUserAgentString(
                 "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-                        + "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36");
+                        + "(KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36");
 
-        webView.setWebViewClient(new WebViewClient());
-        webView.loadUrl(siteUrl);
-
-        tvTitle.setText(siteName + " (离线模式)");
-        showTopBar();
+        webView.setWebViewClient(new WebViewClient() {
+            @Override
+            public void onPageFinished(WebView view, String url) {
+                super.onPageFinished(view, url);
+                tvTitle.setText(view.getTitle() != null ? view.getTitle() : url);
+                // Notify H5 clients about page change
+                if (server != null) {
+                    server.broadcastPageInfo(url, view.getTitle() != null ? view.getTitle() : "");
+                }
+            }
+        });
+        webView.setWebChromeClient(new WebChromeClient());
     }
 
-    // ========================================================================
-    // Key Handling
-    // ========================================================================
+    private void setupAI() {
+        SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
+        String apiKey = prefs.getString("api_key", "");
+        String baseUrl = prefs.getString("api_base_url", "https://api.anthropic.com");
+        String model = prefs.getString("api_model", "claude-haiku-4-5-20251001");
 
-    @Override
-    public boolean onKeyDown(int keyCode, KeyEvent event) {
-        if ("server".equals(mode)) {
-            return handleServerModeKey(keyCode, event);
-        } else {
-            return handleLocalModeKey(keyCode, event);
+        memoryStore = new MemoryStore(this);
+        automation = new WebViewAutomation(webView);
+        agent = new NavigationAgent(apiKey, baseUrl, model, automation, memoryStore);
+    }
+
+    private void setupServer() {
+        // Get the server instance from the application/singleton
+        server = TileTVApp.getServer();
+        if (server != null) {
+            if (tvH5Hint != null) {
+                tvH5Hint.setText("H5: " + server.getH5Url());
+            }
+            server.setMessageListener(new TileTVServer.MessageListener() {
+                @Override
+                public void onClientMessage(String json) {
+                    handleClientMessage(json);
+                }
+
+                @Override
+                public void onClientConnected() {
+                    uiHandler.post(new Runnable() {
+                        @Override
+                        public void run() {
+                            showAiOverlay("H5 客户端已连接", "done");
+                        }
+                    });
+                }
+
+                @Override
+                public void onClientDisconnected() {}
+            });
         }
     }
 
-    /**
-     * Handle key events in server mode.
-     * Double-tap BACK toggles cursor mode. D-pad sends navigation commands.
-     */
-    private boolean handleServerModeKey(int keyCode, KeyEvent event) {
-        WebSocketManager ws = WebSocketManager.getInstance();
+    private void handleClientMessage(final String json) {
+        try {
+            JSONObject msg = new JSONObject(json);
+            String type = msg.optString("type", "");
 
+            switch (type) {
+                case "voice":
+                    final String text = msg.optString("text", "");
+                    if (!text.isEmpty()) {
+                        uiHandler.post(new Runnable() {
+                            @Override
+                            public void run() {
+                                executeVoiceCommand(text);
+                            }
+                        });
+                    }
+                    break;
+
+                case "interrupt":
+                    if (agent != null) {
+                        agent.interrupt();
+                    }
+                    break;
+
+                case "ping":
+                    // Send current page info + screenshot
+                    new Thread(new Runnable() {
+                        @Override
+                        public void run() {
+                            if (server != null && automation != null) {
+                                String frame = automation.screenshot();
+                                String url = automation.getCurrentUrl();
+                                String title = automation.getCurrentTitle();
+                                try {
+                                    JSONObject pong = new JSONObject();
+                                    pong.put("type", "pong");
+                                    pong.put("url", url);
+                                    pong.put("title", title);
+                                    pong.put("frame", frame);
+                                    server.broadcastJson(pong.toString());
+                                } catch (JSONException e) {
+                                    Log.e(TAG, "ping response error", e);
+                                }
+                            }
+                        }
+                    }).start();
+                    break;
+            }
+        } catch (JSONException e) {
+            Log.e(TAG, "handleClientMessage error", e);
+        }
+    }
+
+    private void executeVoiceCommand(String text) {
+        stepCount = 0;
+        logBuilder.setLength(0);
+
+        agent.handleVoiceCommand(text, new NavigationAgent.Callback() {
+            @Override
+            public void onStatus(final String text, final String level) {
+                uiHandler.post(new Runnable() {
+                    @Override
+                    public void run() {
+                        showAiOverlay(text, level);
+                        if ("thinking".equals(level)) {
+                            stepCount++;
+                            tvAiStep.setText("第" + stepCount + "步");
+                            appendLog(text);
+                        }
+                    }
+                });
+                // Also broadcast to H5
+                if (server != null) server.broadcastStatus(text, level);
+            }
+
+            @Override
+            public void onFrame(final String base64) {
+                // Broadcast screenshot to H5
+                if (server != null) server.broadcastFrame(base64);
+            }
+
+            @Override
+            public void onComplete(final String summary) {
+                uiHandler.post(new Runnable() {
+                    @Override
+                    public void run() {
+                        showAiOverlay(summary, "done");
+                        // Auto-hide after 4 seconds
+                        uiHandler.removeCallbacks(hideOverlayRunnable);
+                        uiHandler.postDelayed(hideOverlayRunnable, 4000);
+                    }
+                });
+                if (server != null) {
+                    server.broadcastStatus(summary, "done");
+                    // Send final page info
+                    String url = automation.getCurrentUrl();
+                    String title = automation.getCurrentTitle();
+                    server.broadcastPageInfo(url, title);
+                }
+            }
+
+            @Override
+            public void onError(final String error) {
+                uiHandler.post(new Runnable() {
+                    @Override
+                    public void run() {
+                        showAiOverlay(error, "error");
+                    }
+                });
+                if (server != null) server.broadcastStatus(error, "error");
+            }
+        });
+    }
+
+    // ====== AI Overlay ======
+
+    private void showAiOverlay(String text, String level) {
+        uiHandler.removeCallbacks(hideOverlayRunnable);
+        aiOverlay.setVisibility(View.VISIBLE);
+        aiOverlay.setAlpha(1f);
+        tvAiStatus.setText(text);
+
+        if ("thinking".equals(level)) {
+            tvAiIcon.setTextColor(0xFF0A84FF);
+            tvAiStatus.setTextColor(0xFFFFFFFF);
+        } else if ("done".equals(level)) {
+            tvAiIcon.setTextColor(0xFF30D158);
+            tvAiStatus.setTextColor(0xFF30D158);
+        } else if ("error".equals(level)) {
+            tvAiIcon.setTextColor(0xFFFF453A);
+            tvAiStatus.setTextColor(0xFFFF453A);
+        } else {
+            tvAiIcon.setTextColor(0xFF98989D);
+            tvAiStatus.setTextColor(0xFFFFFFFF);
+        }
+    }
+
+    private void appendLog(String text) {
+        if (logBuilder.length() > 0) logBuilder.append("\n");
+        logBuilder.append(text);
+        tvAiLog.setText(logBuilder.toString());
+        aiLogScroll.setVisibility(View.VISIBLE);
+        aiLogScroll.post(new Runnable() {
+            @Override
+            public void run() {
+                aiLogScroll.fullScroll(ScrollView.FOCUS_DOWN);
+            }
+        });
+    }
+
+    // ====== Top Bar ======
+
+    private void showTopBar() {
+        if (topBar == null) return;
+        topBar.setVisibility(View.VISIBLE);
+        topBar.setAlpha(1f);
+        uiHandler.removeCallbacks(hideTopBarRunnable);
+        uiHandler.postDelayed(hideTopBarRunnable, 4000);
+    }
+
+    // ====== Key Handling ======
+
+    @Override
+    public boolean onKeyDown(int keyCode, KeyEvent event) {
         // Double-tap BACK to toggle cursor mode
         if (keyCode == KeyEvent.KEYCODE_BACK) {
             long now = System.currentTimeMillis();
@@ -333,46 +368,36 @@ public class BrowserActivity extends AppCompatActivity {
                 cursorMode = !cursorMode;
                 cursorView.setCursorEnabled(cursorMode);
                 cursorView.setVisibility(cursorMode ? View.VISIBLE : View.GONE);
-                focusOverlay.setVisibility(cursorMode ? View.GONE : View.VISIBLE);
-                if (tvModeIndicator != null) {
-                    tvModeIndicator.setText(cursorMode ? "Cursor" : "AI Nav");
-                }
-                Toast.makeText(this,
-                        cursorMode ? "光标模式" : "AI导航模式",
-                        Toast.LENGTH_SHORT).show();
+                Toast.makeText(this, cursorMode ? "光标模式" : "普通模式", Toast.LENGTH_SHORT).show();
                 lastBackTime = 0;
                 return true;
             }
             lastBackTime = now;
-            ws.send("{\"type\":\"back\"}");
+            if (webView.canGoBack()) {
+                webView.goBack();
+                return true;
+            }
+            finish();
             return true;
         }
 
-        // In cursor mode, delegate to VirtualCursorView
         if (cursorMode) {
             return cursorView.handleKeyEvent(keyCode, event);
         }
 
-        // AI navigation mode: send D-pad commands to server
+        // D-pad controls scrolling
         switch (keyCode) {
             case KeyEvent.KEYCODE_DPAD_UP:
-                ws.send("{\"type\":\"dpad\",\"direction\":\"up\"}");
+                webView.scrollBy(0, -200);
                 return true;
             case KeyEvent.KEYCODE_DPAD_DOWN:
-                ws.send("{\"type\":\"dpad\",\"direction\":\"down\"}");
+                webView.scrollBy(0, 200);
                 return true;
             case KeyEvent.KEYCODE_DPAD_LEFT:
-                ws.send("{\"type\":\"dpad\",\"direction\":\"left\"}");
+                webView.scrollBy(-200, 0);
                 return true;
             case KeyEvent.KEYCODE_DPAD_RIGHT:
-                ws.send("{\"type\":\"dpad\",\"direction\":\"right\"}");
-                return true;
-            case KeyEvent.KEYCODE_DPAD_CENTER:
-            case KeyEvent.KEYCODE_ENTER:
-                ws.send("{\"type\":\"dpad\",\"direction\":\"center\"}");
-                return true;
-            case KeyEvent.KEYCODE_HOME:
-                ws.send("{\"type\":\"home\"}");
+                webView.scrollBy(200, 0);
                 return true;
         }
 
@@ -380,37 +405,7 @@ public class BrowserActivity extends AppCompatActivity {
         return super.onKeyDown(keyCode, event);
     }
 
-    /**
-     * Handle key events in local (offline) mode.
-     * BACK navigates WebView history; other keys delegate to cursor.
-     */
-    private boolean handleLocalModeKey(int keyCode, KeyEvent event) {
-        if (keyCode == KeyEvent.KEYCODE_BACK) {
-            if (webView != null && webView.canGoBack()) {
-                webView.goBack();
-                return true;
-            }
-            finish();
-            return true;
-        }
-        return cursorView.handleKeyEvent(keyCode, event);
-    }
-
-    // ========================================================================
-    // Top Bar Management
-    // ========================================================================
-
-    private void showTopBar() {
-        if (topBar == null) return;
-        topBar.setVisibility(View.VISIBLE);
-        topBar.setAlpha(1f);
-        uiHandler.removeCallbacks(hideTopBarRunnable);
-        uiHandler.postDelayed(hideTopBarRunnable, 3000);
-    }
-
-    // ========================================================================
-    // Lifecycle
-    // ========================================================================
+    // ====== Lifecycle ======
 
     @Override
     protected void onResume() {
@@ -425,14 +420,6 @@ public class BrowserActivity extends AppCompatActivity {
         if (webView != null) {
             webView.stopLoading();
             webView.destroy();
-        }
-        // Clean up bitmap memory
-        if (ivBrowser != null) {
-            Bitmap old = (Bitmap) ivBrowser.getTag();
-            if (old != null && !old.isRecycled()) {
-                old.recycle();
-            }
-            ivBrowser.setImageBitmap(null);
         }
     }
 }

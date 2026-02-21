@@ -3,10 +3,10 @@
     <color name="black">#FF000000</color>
     <color name="white">#FFFFFFFF</color>
 
-    <!-- Apple TV 色彩系统 -->
-    <color name="bg_primary">#000000</color>
-    <color name="bg_surface">#1C1C1E</color>
-    <color name="bg_surface_elevated">#2C2C2E</color>
+    <!-- Apple TV 色彩系统 (深蓝灰主题) -->
+    <color name="bg_primary">#1a1a2e</color>
+    <color name="bg_surface">#1C1C3E</color>
+    <color name="bg_surface_elevated">#2C2C4E</color>
     <color name="accent_blue">#0A84FF</color>
     <color name="accent_purple">#5E5CE6</color>
     <color name="accent_green">#30D158</color>
@@ -17,6 +17,6 @@
     <color name="text_tertiary">#636366</color>
     <color name="focus_glow">#660A84FF</color>
     <color name="focus_border">#40FFFFFF</color>
-    <color name="separator">#38383A</color>
+    <color name="separator">#38384A</color>
     <color name="card_shadow">#40000000</color>
 </resources>

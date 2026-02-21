@@ -3,11 +3,10 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
-    android:background="#000000"
+    android:background="@drawable/bg_gradient_dark"
     android:padding="48dp"
     android:gravity="center_horizontal">
 
-    <!-- 标题 -->
     <TextView
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
@@ -17,7 +16,7 @@
         android:textStyle="bold"
         android:layout_marginBottom="32dp" />
 
-    <!-- 服务器设置卡片 -->
+    <!-- Claude API 设置卡片 -->
     <LinearLayout
         android:layout_width="480dp"
         android:layout_height="wrap_content"
@@ -28,105 +27,96 @@
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="服务器连接"
+            android:text="Claude AI 配置"
             android:textColor="#FFFFFF"
             android:textSize="18sp"
             android:textStyle="bold"
             android:layout_marginBottom="16dp" />
 
-        <!-- 服务器地址 -->
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="服务器地址"
+            android:text="API Key"
             android:textColor="#98989D"
             android:textSize="13sp"
             android:layout_marginBottom="4dp" />
 
         <EditText
-            android:id="@+id/et_host"
+            android:id="@+id/et_api_key"
             android:layout_width="match_parent"
             android:layout_height="44dp"
             android:background="@drawable/bg_input"
             android:textColor="#FFFFFF"
             android:textColorHint="#636366"
-            android:hint="例如: 192.168.1.100"
-            android:textSize="15sp"
+            android:hint="sk-ant-..."
+            android:textSize="14sp"
             android:paddingLeft="12dp"
             android:paddingRight="12dp"
-            android:inputType="text"
+            android:inputType="textPassword"
             android:singleLine="true"
             android:layout_marginBottom="12dp"
             android:focusable="true"
             android:focusableInTouchMode="true" />
 
-        <!-- 端口 -->
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="端口"
+            android:text="API Base URL (可选)"
             android:textColor="#98989D"
             android:textSize="13sp"
             android:layout_marginBottom="4dp" />
 
         <EditText
-            android:id="@+id/et_port"
-            android:layout_width="120dp"
+            android:id="@+id/et_base_url"
+            android:layout_width="match_parent"
             android:layout_height="44dp"
             android:background="@drawable/bg_input"
             android:textColor="#FFFFFF"
             android:textColorHint="#636366"
-            android:hint="9870"
-            android:textSize="15sp"
+            android:hint="https://api.anthropic.com"
+            android:textSize="14sp"
             android:paddingLeft="12dp"
             android:paddingRight="12dp"
-            android:inputType="number"
+            android:inputType="textUri"
+            android:singleLine="true"
+            android:layout_marginBottom="12dp"
+            android:focusable="true"
+            android:focusableInTouchMode="true" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="模型"
+            android:textColor="#98989D"
+            android:textSize="13sp"
+            android:layout_marginBottom="4dp" />
+
+        <EditText
+            android:id="@+id/et_model"
+            android:layout_width="match_parent"
+            android:layout_height="44dp"
+            android:background="@drawable/bg_input"
+            android:textColor="#FFFFFF"
+            android:textColorHint="#636366"
+            android:hint="claude-haiku-4-5-20251001"
+            android:textSize="14sp"
+            android:paddingLeft="12dp"
+            android:paddingRight="12dp"
+            android:inputType="text"
             android:singleLine="true"
             android:layout_marginBottom="20dp"
             android:focusable="true"
             android:focusableInTouchMode="true" />
 
-        <!-- 按钮行 -->
-        <LinearLayout
+        <Button
+            android:id="@+id/btn_save"
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:gravity="center">
-
-            <Button
-                android:id="@+id/btn_test"
-                android:layout_width="0dp"
-                android:layout_height="44dp"
-                android:layout_weight="1"
-                android:layout_marginRight="8dp"
-                android:background="@drawable/bg_btn_secondary"
-                android:text="测试连接"
-                android:textColor="#0A84FF"
-                android:textSize="15sp"
-                android:focusable="true" />
-
-            <Button
-                android:id="@+id/btn_save"
-                android:layout_width="0dp"
-                android:layout_height="44dp"
-                android:layout_weight="1"
-                android:layout_marginLeft="8dp"
-                android:background="@drawable/bg_btn_primary"
-                android:text="保存"
-                android:textColor="#FFFFFF"
-                android:textSize="15sp"
-                android:focusable="true" />
-        </LinearLayout>
-
-        <!-- 连接状态 -->
-        <TextView
-            android:id="@+id/tv_test_result"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="12dp"
-            android:textSize="13sp"
-            android:textColor="#98989D"
-            android:visibility="gone" />
+            android:layout_height="44dp"
+            android:background="@drawable/bg_btn_primary"
+            android:text="保存"
+            android:textColor="#FFFFFF"
+            android:textSize="15sp"
+            android:focusable="true" />
     </LinearLayout>
 
     <!-- H5地址提示 -->
@@ -136,16 +126,13 @@
         android:layout_height="wrap_content"
         android:layout_marginTop="24dp"
         android:textColor="#636366"
-        android:textSize="13sp"
-        android:text="H5语音控制: http://服务器地址:端口/h5" />
+        android:textSize="13sp" />
 
-    <!-- 版本信息 -->
     <TextView
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_marginTop="16dp"
         android:textColor="#636366"
         android:textSize="12sp"
-        android:text="TileTV v2.0.0 · AI Navigation Edition" />
-
+        android:text="TileTV v3.0.0 · AI Navigation" />
 </LinearLayout>

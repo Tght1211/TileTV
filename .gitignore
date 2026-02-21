@@ -4,6 +4,7 @@
 /.idea
 .DS_Store
 /build
+app/build/
 /captures
 .externalNativeBuild
 .cxx
@@ -14,6 +15,10 @@ server/node_modules/
 server/dist/
 server/.env
 server/data/*.json
+server/package-lock.json
 
 # APK
 *.apk
+
+# Screenshots
+screenshot_*.png

@@ -1,7 +1,6 @@
 package com.tiletv.app;
 
 import android.content.Intent;
-import android.content.SharedPreferences;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
@@ -21,7 +20,7 @@ import com.tiletv.app.model.TileCategory;
 import com.tiletv.app.model.TileConfig;
 import com.tiletv.app.model.TileItem;
 import com.tiletv.app.util.AssetUtil;
-import com.tiletv.app.ws.WebSocketManager;
+import com.tiletv.app.server.TileTVServer;
 
 import java.text.SimpleDateFormat;
 import java.util.Date;
@@ -48,14 +47,11 @@ public class MainActivity extends AppCompatActivity implements TileAdapter.OnTil
     private View statusDot;
     private TextView tvServerStatus;
     private TextView tvServerInfo;
+    private View btnSettings;
 
     private Handler clockHandler;
     private Runnable clockRunnable;
     private List<TileCategory> categories;
-
-    private static final String PREFS_NAME = "tiletv_prefs";
-    private static final String KEY_SERVER_HOST = "server_host";
-    private static final String KEY_SERVER_PORT = "server_port";
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -95,6 +91,29 @@ public class MainActivity extends AppCompatActivity implements TileAdapter.OnTil
         statusDot = findViewById(R.id.status_dot);
         tvServerStatus = findViewById(R.id.tv_server_status);
         tvServerInfo = findViewById(R.id.tv_server_info);
+        btnSettings = findViewById(R.id.btn_settings);
+
+        // 设置按钮点击 → 打开设置页
+        btnSettings.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                startActivity(new Intent(MainActivity.this, SettingsActivity.class));
+            }
+        });
+
+        // 设置按钮焦点效果
+        btnSettings.setOnFocusChangeListener(new View.OnFocusChangeListener() {
+            @Override
+            public void onFocusChange(View v, boolean hasFocus) {
+                if (hasFocus) {
+                    v.animate().scaleX(1.08f).scaleY(1.08f).setDuration(150).start();
+                    ((TextView) v).setTextColor(0xFFFFFFFF);
+                } else {
+                    v.animate().scaleX(1.0f).scaleY(1.0f).setDuration(150).start();
+                    ((TextView) v).setTextColor(0xFF0A84FF);
+                }
+            }
+        });
     }
 
     /**
@@ -164,90 +183,25 @@ public class MainActivity extends AppCompatActivity implements TileAdapter.OnTil
         clockRunnable.run();
     }
 
-    /**
-     * Connect to the WebSocket server using settings from SharedPreferences.
-     */
     private void connectServer() {
-        SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
-        String host = prefs.getString(KEY_SERVER_HOST, "");
-        int port = prefs.getInt(KEY_SERVER_PORT, 9870);
-
-        if (host.isEmpty()) {
-            tvServerStatus.setText("未配置服务器");
-            statusDot.setBackgroundResource(R.drawable.dot_gray);
+        TileTVServer server = TileTVApp.getServer();
+        if (server != null) {
+            statusDot.setBackgroundResource(R.drawable.dot_green);
+            tvServerStatus.setText("AI 就绪");
             if (tvServerInfo != null) {
-                tvServerInfo.setText("按 Menu 键打开设置");
+                tvServerInfo.setText("H5遥控: " + server.getH5Url());
             }
-            return;
+        } else {
+            statusDot.setBackgroundResource(R.drawable.dot_red);
+            tvServerStatus.setText("服务器错误");
         }
-
-        final String wsUrl = "ws://" + host + ":" + port;
-        if (tvServerInfo != null) {
-            tvServerInfo.setText(host + ":" + port);
-        }
-
-        // Connect on background thread (WebSocket library does blocking connect)
-        new Thread(new Runnable() {
-            @Override
-            public void run() {
-                WebSocketManager.getInstance().connect(wsUrl, new WebSocketManager.Callback() {
-                    @Override
-                    public void onConnected() {
-                        runOnUiThread(new Runnable() {
-                            @Override
-                            public void run() {
-                                statusDot.setBackgroundResource(R.drawable.dot_green);
-                                tvServerStatus.setText("已连接");
-                                // Refresh adapter to update AI mode labels on tiles
-                                if (rvCategories.getAdapter() != null) {
-                                    rvCategories.getAdapter().notifyDataSetChanged();
-                                }
-                            }
-                        });
-                    }
-
-                    @Override
-                    public void onDisconnected() {
-                        runOnUiThread(new Runnable() {
-                            @Override
-                            public void run() {
-                                statusDot.setBackgroundResource(R.drawable.dot_red);
-                                tvServerStatus.setText("未连接");
-                                if (rvCategories.getAdapter() != null) {
-                                    rvCategories.getAdapter().notifyDataSetChanged();
-                                }
-                            }
-                        });
-                    }
-
-                    @Override
-                    public void onMessage(String message) {
-                        // Home screen generally does not handle WebSocket messages
-                    }
-                });
-            }
-        }).start();
     }
 
-    /**
-     * Tile click callback - launch BrowserActivity in server or local mode.
-     */
     @Override
     public void onTileClick(TileItem item) {
         Intent intent = new Intent(this, BrowserActivity.class);
         intent.putExtra("url", item.getUrl());
         intent.putExtra("name", item.getName());
-        intent.putExtra("level", item.getLevel());
-
-        if (WebSocketManager.getInstance().isConnected()) {
-            intent.putExtra("mode", "server");
-            // Send open command to backend
-            WebSocketManager.getInstance().send("{\"type\":\"open\",\"url\":\""
-                    + item.getUrl() + "\",\"name\":\"" + item.getName() + "\"}");
-        } else {
-            intent.putExtra("mode", "local");
-        }
-
         startActivity(intent);
     }
 
@@ -255,23 +209,14 @@ public class MainActivity extends AppCompatActivity implements TileAdapter.OnTil
     protected void onResume() {
         super.onResume();
         hideSystemUI();
-        // Refresh connection status display
-        if (WebSocketManager.getInstance().isConnected()) {
+        TileTVServer server = TileTVApp.getServer();
+        if (server != null) {
             statusDot.setBackgroundResource(R.drawable.dot_green);
-            tvServerStatus.setText("已连接");
-        } else {
-            // Might have been disconnected while in another activity
-            SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
-            String host = prefs.getString(KEY_SERVER_HOST, "");
-            if (host.isEmpty()) {
-                statusDot.setBackgroundResource(R.drawable.dot_gray);
-                tvServerStatus.setText("未配置服务器");
-            } else {
-                statusDot.setBackgroundResource(R.drawable.dot_red);
-                tvServerStatus.setText("未连接");
+            tvServerStatus.setText("AI 就绪");
+            if (tvServerInfo != null) {
+                tvServerInfo.setText("H5遥控: " + server.getH5Url());
             }
         }
-        // Refresh tile labels
         if (rvCategories.getAdapter() != null) {
             rvCategories.getAdapter().notifyDataSetChanged();
         }

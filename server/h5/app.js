@@ -2,7 +2,7 @@
   'use strict';
 
   // ========== Configuration ==========
-  var wsUrl = 'ws://' + location.hostname + ':' + (location.port || '9870');
+  var wsUrl = 'ws://' + location.hostname + ':' + (location.port || '9870') + '/ws';
 
   // ========== DOM References ==========
   var statusDot = document.querySelector('.status-dot');
@@ -12,6 +12,8 @@
   var currentUrl = document.getElementById('currentUrl');
   var aiStatus = document.getElementById('aiStatus');
   var aiText = document.getElementById('aiText');
+  var aiLog = document.getElementById('aiLog');
+  var aiLogList = document.getElementById('aiLogList');
   var voiceBtn = document.getElementById('voiceBtn');
   var voiceRing = document.getElementById('voiceRing');
   var voiceHint = document.getElementById('voiceHint');
@@ -43,8 +45,7 @@
     ws.onopen = function () {
       statusDot.classList.add('connected');
       statusText.textContent = '已连接';
-      reconnectDelay = 3000; // reset backoff
-      // Request current state
+      reconnectDelay = 3000;
       safeSend({ type: 'ping' });
     };
 
@@ -75,7 +76,6 @@
       reconnectTimer = null;
       connect();
     }, reconnectDelay);
-    // Exponential backoff capped at 30s
     reconnectDelay = Math.min(reconnectDelay * 1.5, 30000);
   }
 
@@ -89,7 +89,6 @@
   function handleMessage(msg) {
     switch (msg.type) {
       case 'frame':
-        // Display screenshot
         previewImage.src = 'data:image/jpeg;base64,' + msg.data;
         previewImage.style.display = 'block';
         previewPlaceholder.style.display = 'none';
@@ -121,20 +120,47 @@
     }
   }
 
-  // ========== AI Status ==========
+  // ========== AI Status & Log ==========
   function updateAiStatus(text, level) {
     aiText.textContent = text;
-    // Reset classes, keep base
     aiStatus.className = 'ai-status glass';
     if (level) {
       aiStatus.classList.add(level);
     }
-    // Spin icon when thinking
+
     var icon = aiStatus.querySelector('.ai-icon');
     if (level === 'thinking') {
       icon.classList.add('spinning');
+      // Show log and add entry
+      aiLog.style.display = 'block';
+      addLogEntry(text);
     } else {
       icon.classList.remove('spinning');
+      if (level === 'done' || level === 'error') {
+        addLogEntry(text);
+        // Auto-hide log after a few seconds
+        setTimeout(function () {
+          aiLog.style.display = 'none';
+          aiLogList.innerHTML = '';
+        }, 5000);
+      }
+    }
+  }
+
+  function addLogEntry(text) {
+    var entry = document.createElement('div');
+    entry.className = 'ai-log-entry';
+    var time = new Date();
+    var timeStr = time.getHours().toString().padStart(2, '0') + ':' +
+                  time.getMinutes().toString().padStart(2, '0') + ':' +
+                  time.getSeconds().toString().padStart(2, '0');
+    entry.textContent = timeStr + ' ' + text;
+    aiLogList.appendChild(entry);
+    // Auto-scroll to bottom
+    aiLogList.scrollTop = aiLogList.scrollHeight;
+    // Keep max 20 entries
+    while (aiLogList.children.length > 20) {
+      aiLogList.removeChild(aiLogList.firstChild);
     }
   }
 
@@ -144,6 +170,10 @@
     text = text.trim();
     safeSend({ type: 'voice', text: text });
     updateAiStatus('发送: "' + text + '"', 'thinking');
+    // Clear previous log
+    aiLogList.innerHTML = '';
+    aiLog.style.display = 'block';
+    addLogEntry('发送指令: ' + text);
   }
 
   // ========== Speech Recognition ==========
@@ -203,12 +233,10 @@
     try {
       recognition.start();
     } catch (e) {
-      // already started
       stopRecording();
       return;
     }
 
-    // Haptic feedback
     if (navigator.vibrate) {
       navigator.vibrate(50);
     }
@@ -229,7 +257,6 @@
 
   // ========== Event Bindings ==========
 
-  // --- Voice button: long press ---
   var pressTimer = null;
 
   voiceBtn.addEventListener('touchstart', function (e) {
@@ -252,9 +279,7 @@
     if (isRecording) stopRecording();
   });
 
-  // Mouse fallback for desktop testing
   voiceBtn.addEventListener('mousedown', function (e) {
-    // skip if touch device already handled
     if ('ontouchstart' in window) return;
     pressTimer = setTimeout(function () {
       startRecording();
@@ -275,7 +300,6 @@
     if (isRecording) stopRecording();
   });
 
-  // --- Text input ---
   sendBtn.addEventListener('click', function () {
     var text = textInput.value.trim();
     if (text) {
@@ -292,7 +316,6 @@
     }
   });
 
-  // --- Shortcut buttons ---
   var shortcutBtns = document.querySelectorAll('.shortcut-btn');
   for (var i = 0; i < shortcutBtns.length; i++) {
     (function (btn) {
@@ -300,7 +323,6 @@
         var cmd = btn.getAttribute('data-cmd');
         if (cmd) {
           sendCommand(cmd);
-          // Brief visual feedback
           btn.style.transform = 'scale(0.94)';
           setTimeout(function () {
             btn.style.transform = '';
@@ -317,7 +339,6 @@
     toast.textContent = text;
     document.body.appendChild(toast);
 
-    // Trigger reflow then animate in
     requestAnimationFrame(function () {
       requestAnimationFrame(function () {
         toast.classList.add('show');

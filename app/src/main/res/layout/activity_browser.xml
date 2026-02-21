@@ -2,42 +2,95 @@
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="#000000">
+    android:background="#1a1a2e">
 
-    <!-- Server模式：截图显示 -->
-    <ImageView
-        android:id="@+id/iv_browser"
-        android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:scaleType="fitCenter"
-        android:visibility="gone" />
-
-    <!-- Local模式：WebView -->
+    <!-- WebView浏览器(全屏) -->
     <WebView
         android:id="@+id/webview"
         android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:visibility="gone" />
+        android:layout_height="match_parent" />
 
-    <!-- 焦点叠加层（Server模式AI导航） -->
-    <com.tiletv.app.widget.FocusOverlayView
-        android:id="@+id/focus_overlay"
-        android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:visibility="gone" />
-
-    <!-- 虚拟光标叠加层（光标模式兜底） -->
+    <!-- 虚拟光标 -->
     <com.tiletv.app.widget.VirtualCursorView
         android:id="@+id/virtual_cursor"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:visibility="gone" />
 
-    <!-- 顶部信息栏 -->
+    <!-- AI浮动状态悬浮层(底部) -->
+    <LinearLayout
+        android:id="@+id/ai_overlay"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom"
+        android:layout_marginLeft="24dp"
+        android:layout_marginRight="24dp"
+        android:layout_marginBottom="20dp"
+        android:orientation="vertical"
+        android:background="@drawable/bg_ai_overlay"
+        android:padding="16dp"
+        android:visibility="gone"
+        android:elevation="8dp">
+
+        <!-- 状态行 -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical">
+
+            <TextView
+                android:id="@+id/tv_ai_icon"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="✦"
+                android:textSize="16sp"
+                android:textColor="#0A84FF"
+                android:layout_marginRight="10dp" />
+
+            <TextView
+                android:id="@+id/tv_ai_status"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:textColor="#FFFFFF"
+                android:textSize="13sp"
+                android:singleLine="true"
+                android:ellipsize="end" />
+
+            <TextView
+                android:id="@+id/tv_ai_step"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textColor="#0A84FF"
+                android:textSize="11sp" />
+        </LinearLayout>
+
+        <!-- 操作日志(可滚动,最多显示3行) -->
+        <ScrollView
+            android:id="@+id/ai_log_scroll"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:maxHeight="60dp"
+            android:layout_marginTop="6dp"
+            android:visibility="gone">
+
+            <TextView
+                android:id="@+id/tv_ai_log"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:textColor="#98989D"
+                android:textSize="11sp"
+                android:fontFamily="monospace"
+                android:lineSpacingExtra="2dp" />
+        </ScrollView>
+    </LinearLayout>
+
+    <!-- 顶部标题栏(半透明,自动隐藏) -->
     <LinearLayout
         android:id="@+id/top_bar"
         android:layout_width="match_parent"
-        android:layout_height="48dp"
+        android:layout_height="44dp"
         android:layout_gravity="top"
         android:orientation="horizontal"
         android:gravity="center_vertical"
@@ -51,35 +104,16 @@
             android:layout_height="wrap_content"
             android:layout_weight="1"
             android:textColor="#FFFFFF"
-            android:textSize="16sp"
+            android:textSize="15sp"
             android:textStyle="bold"
             android:singleLine="true"
             android:ellipsize="end" />
 
         <TextView
-            android:id="@+id/tv_ai_status"
+            android:id="@+id/tv_h5_hint"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:textColor="#0A84FF"
-            android:textSize="13sp"
-            android:drawableLeft="@drawable/ic_ai_dot"
-            android:drawablePadding="6dp" />
+            android:textColor="#636366"
+            android:textSize="11sp" />
     </LinearLayout>
-
-    <!-- 模式指示器（右下角） -->
-    <TextView
-        android:id="@+id/tv_mode_indicator"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_gravity="bottom|right"
-        android:layout_margin="16dp"
-        android:background="@drawable/bg_mode_badge"
-        android:paddingLeft="10dp"
-        android:paddingRight="10dp"
-        android:paddingTop="4dp"
-        android:paddingBottom="4dp"
-        android:textColor="#FFFFFF"
-        android:textSize="11sp"
-        android:text="AI Nav" />
-
 </FrameLayout>
