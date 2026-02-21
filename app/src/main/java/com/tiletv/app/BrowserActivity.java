@@ -3,6 +3,7 @@ package com.tiletv.app;
 import android.content.SharedPreferences;
 import android.graphics.Bitmap;
 import android.os.Build;
+
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
@@ -20,6 +21,8 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.webkit.WebSettingsCompat;
+import androidx.webkit.WebViewFeature;
 
 import com.tiletv.app.ai.MemoryStore;
 import com.tiletv.app.ai.NavigationAgent;
@@ -29,6 +32,9 @@ import com.tiletv.app.widget.VirtualCursorView;
 
 import org.json.JSONException;
 import org.json.JSONObject;
+
+import java.util.Collections;
+import java.util.HashSet;
 
 /**
  * Browser Activity v3 - WebView + AI Agent + 内嵌服务器通信。
@@ -163,8 +169,12 @@ public class BrowserActivity extends AppCompatActivity {
                 "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
                         + "(KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36");
 
-        // 硬件加速层
-        webView.setLayerType(View.LAYER_TYPE_HARDWARE, null);
+        // 移除 X-Requested-With 请求头（WebView默认发送包名，暴露WebView身份）
+        removeXRequestedWithHeader(settings);
+
+        // 不设置硬件层类型（LAYER_TYPE_NONE），让系统通过窗口级硬件加速渲染
+        // 注意：LAYER_TYPE_HARDWARE 会导致 HTML5 video 黑屏（SurfaceTexture无法合成到离屏纹理）
+        webView.setLayerType(View.LAYER_TYPE_NONE, null);
 
         webView.setWebViewClient(new WebViewClient() {
             @Override
@@ -247,8 +257,6 @@ public class BrowserActivity extends AppCompatActivity {
      */
     private void injectPCBrowserEmulation(WebView view) {
         String js = "(function(){"
-            + "if(window.__pcEmulationDone)return;"
-            + "window.__pcEmulationDone=true;"
 
             // === Navigator 属性覆盖 ===
             + "try{Object.defineProperty(navigator,'platform',{get:function(){return 'Win32';},configurable:true});}catch(e){}"
@@ -256,6 +264,8 @@ public class BrowserActivity extends AppCompatActivity {
             + "try{Object.defineProperty(navigator,'vendor',{get:function(){return 'Google Inc.';},configurable:true});}catch(e){}"
             + "try{Object.defineProperty(navigator,'webdriver',{get:function(){return false;},configurable:true});}catch(e){}"
             + "try{Object.defineProperty(navigator,'languages',{get:function(){return['zh-CN','zh','en'];},configurable:true});}catch(e){}"
+            + "try{Object.defineProperty(navigator,'userAgent',{get:function(){return 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';},configurable:true});}catch(e){}"
+            + "try{Object.defineProperty(navigator,'appVersion',{get:function(){return '5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';},configurable:true});}catch(e){}"
 
             // === window.chrome 对象（真Chrome有，WebView没有）===
             + "if(!window.chrome){window.chrome={runtime:{id:undefined,connect:function(){},sendMessage:function(){},onMessage:{addListener:function(){}}},app:{isInstalled:false},csi:function(){return{};},loadTimes:function(){return{};}};};"
@@ -274,9 +284,6 @@ public class BrowserActivity extends AppCompatActivity {
             + "var m=[{type:'application/pdf',suffixes:'pdf',description:'Portable Document Format'}];"
             + "m.namedItem=function(n){for(var i=0;i<this.length;i++){if(this[i].type===n)return this[i];}return null;};"
             + "return m;},configurable:true});}catch(e){}"
-
-            // === 移除 WebView/移动端特征 ===
-            + "try{delete window.__wbRenderOpt;delete window.__IS_WEBVIEW__;delete window.__IS_ANDROID__;}catch(e){}"
 
             // === Screen 尺寸 ===
             + "try{"
@@ -302,6 +309,12 @@ public class BrowserActivity extends AppCompatActivity {
             + "try{Object.defineProperty(window,'ontouchstart',{get:function(){return undefined;},set:function(){},configurable:true});}catch(e){}"
             + "try{Object.defineProperty(window,'ontouchend',{get:function(){return undefined;},set:function(){},configurable:true});}catch(e){}"
             + "try{Object.defineProperty(window,'ontouchmove',{get:function(){return undefined;},set:function(){},configurable:true});}catch(e){}"
+
+            // === 移除 window.orientation（移动端特有）===
+            + "try{Object.defineProperty(window,'orientation',{get:function(){return undefined;},configurable:true});}catch(e){}"
+
+            // === 清除 WebView 标识 ===
+            + "try{delete window.__IS_WEBVIEW__;delete window.__IS_ANDROID__;delete window.__wbRenderOpt;delete window.opera;}catch(e){}"
 
             // === navigator.connection（移除移动端网络信息）===
             + "try{Object.defineProperty(navigator,'connection',{get:function(){return undefined;},configurable:true});}catch(e){}"
@@ -350,9 +363,9 @@ public class BrowserActivity extends AppCompatActivity {
             if (tvH5Hint != null) {
                 String h5Url = server.getH5Url();
                 String ip = server.getLocalIpAddress();
-                if ("127.0.0.1".equals(ip) || ip.startsWith("10.0.2.") || ip.startsWith("10.0.3.")) {
+                if ("127.0.0.1".equals(ip) || ip.startsWith("10.0.2.") || ip.startsWith("10.0.3.") || ip.startsWith("192.168.232.")) {
                     // 模拟器环境，提示使用 adb forward
-                    tvH5Hint.setText("H5: localhost:9870 (模拟器)");
+                    tvH5Hint.setText("H5: 用Mac局域网IP:9870 (需adb forward)");
                 } else {
                     tvH5Hint.setText("H5: " + h5Url);
                 }
@@ -630,5 +643,36 @@ public class BrowserActivity extends AppCompatActivity {
             webView.stopLoading();
             webView.destroy();
         }
+    }
+
+    /**
+     * 移除 X-Requested-With 请求头。
+     * WebView默认在每个HTTP请求中发送 X-Requested-With: <package-name>，
+     * 这让服务端能轻松识别WebView并限制内容（如bilibili视频黑屏）。
+     */
+    @SuppressWarnings("deprecation")
+    private void removeXRequestedWithHeader(WebSettings settings) {
+        // 方案1: androidx.webkit (WebView 102+)
+        try {
+            if (WebViewFeature.isFeatureSupported(WebViewFeature.REQUESTED_WITH_HEADER_ALLOW_LIST)) {
+                WebSettingsCompat.setRequestedWithHeaderOriginAllowList(settings, new HashSet<String>());
+                Log.d(TAG, "X-Requested-With header disabled via WebSettingsCompat");
+                return;
+            }
+        } catch (Exception e) {
+            Log.d(TAG, "WebSettingsCompat failed: " + e.getMessage());
+        }
+
+        // 方案2: 反射调用隐藏API (Chrome 96+)
+        try {
+            java.lang.reflect.Method m = WebSettings.class.getMethod("setRequestedWithHeaderMode", int.class);
+            m.invoke(settings, 2); // NO_HEADER = 2
+            Log.d(TAG, "X-Requested-With header disabled via reflection");
+            return;
+        } catch (Exception e) {
+            Log.d(TAG, "Reflection method not available: " + e.getMessage());
+        }
+
+        Log.d(TAG, "Cannot remove X-Requested-With header on this WebView version");
     }
 }
